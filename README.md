@@ -4,16 +4,19 @@ Global hotkey that toggles dictation in the Claude desktop app (Windows), which 
 
 > Unofficial community tool. Not affiliated with or endorsed by Anthropic.
 
-Default: **Ctrl+Space** toggles the composer's Dictate button, and dictation auto-stops after 90 seconds.
-Both the hotkey and the timeout can be changed in [Settings](#usage).
+Default hotkey: **Ctrl+Space**. **Tap** it to start dictating and tap again to stop, or **hold** it to
+record and release to stop. Dictation auto-stops after 90 seconds.
+The hotkey and the timeout can be changed in [Settings](#usage).
+Works whether Claude's own **Hold to record** dictation setting is on or off.
 If you use an input method that switches on Ctrl+Space (e.g. Chinese or Japanese), pick another hotkey.
 The hotkey only fires while the Claude window is focused; everywhere else the key combo behaves normally.
 
 ## Requirements
 
 - Windows 10/11 (64-bit)
-- Claude desktop app with **Dictation settings → Hold to record** turned **off** (toggle mode)
-- Claude UI in English (the button is located by its accessible names `Dictate` / `Stop dictation`)
+- Claude desktop app
+- Claude UI in English (the button is located by its accessible names `Dictate` / `Press and hold to record` /
+  `Stop dictation`)
 
 ## Install
 

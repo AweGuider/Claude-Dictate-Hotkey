@@ -17,6 +17,7 @@ global IniPath := FileExist(A_ScriptDir "\settings.ini")
 global ClaudeWindow := "ahk_exe claude.exe ahk_class Chrome_WidgetWin_1"
 global CurrentHotkey := ""
 global TimeoutSeconds := 90
+global HoldThresholdMs := 500
 global AutoStopHwnd := 0
 global StartupShortcut := A_Startup "\Claude Dictate Hotkey.lnk"
 
@@ -89,9 +90,24 @@ RegisterHotkey(key) {
     A_IconTip := "Claude Dictate Hotkey: " HotkeyText(key)
 }
 
-OnDictateHotkey(*) {
-    global AutoStopHwnd
+; Starts on press. A quick tap keeps recording until the next press (toggle); holding
+; longer than HoldThresholdMs stops on release (push-to-talk).
+OnDictateHotkey(thisHotkey) {
     hwnd := WinExist("A")
+    pressedAt := A_TickCount
+    wasDictating := ToggleDictation(hwnd)
+    if wasDictating != "" && !wasDictating {
+        KeyWait(MainKey(thisHotkey))
+        if A_TickCount - pressedAt >= HoldThresholdMs {
+            StopDictation(hwnd)
+            SetTimer(AutoStop, 0)
+        }
+    }
+}
+
+; Returns whether dictation was running before the toggle, or "" if no button was found.
+ToggleDictation(hwnd) {
+    global AutoStopHwnd
     button := FindDictateButton(hwnd)
     if !button {
         Sleep(300)   ; Chromium builds its accessibility tree on first request
@@ -100,7 +116,7 @@ OnDictateHotkey(*) {
     if !button {
         SoundBeep(400, 150)
         ShowTip("Dictate button not found")
-        return
+        return ""
     }
     try {
         wasDictating := IsDictating(button)
@@ -114,23 +130,33 @@ OnDictateHotkey(*) {
         AutoStopHwnd := hwnd
         SetTimer(AutoStop, -TimeoutSeconds * 1000)
     }
+    return wasDictating
 }
 
-AutoStop() {
-    if !WinExist("ahk_id " AutoStopHwnd)
-        return
-    button := FindDictateButton(AutoStopHwnd)
+; Returns true if a running dictation was stopped.
+StopDictation(hwnd) {
+    if !WinExist("ahk_id " hwnd)
+        return false
+    button := FindDictateButton(hwnd)
     if !button
-        return
+        return false
     try {
         if !IsDictating(button)
-            return
+            return false
         ClickDictate(button)
     } finally {
         ObjRelease(button)
     }
-    ShowTip("Dictation auto-stopped after " TimeoutSeconds "s")
+    return true
 }
+
+AutoStop() {
+    if StopDictation(AutoStopHwnd)
+        ShowTip("Dictation auto-stopped after " TimeoutSeconds "s")
+}
+
+; "^+Space" -> "Space": the key KeyWait should watch for release.
+MainKey(hotkeyName) => RegExReplace(hotkeyName, "^[#!^+<>*~$]+")
 
 ShowSettings(*) {
     g := Gui("+AlwaysOnTop", "Claude Dictate Hotkey")
@@ -140,6 +166,7 @@ ShowSettings(*) {
     readable := g.AddText("x+10 yp+3 w220", HotkeyText(CurrentHotkey))
     keyEdit.OnEvent("Change", (*) => readable.Value := HotkeyText(keyEdit.Value))
     g.AddButton("xm w200", "Record new hotkey...").OnEvent("Click", (*) => RecordHotkey(keyEdit, readable))
+    g.AddText("xm y+6 cGray", "Tap to start/stop, or hold to record and release to stop.")
     g.AddText("xm y+14", "Auto-stop dictation after (seconds, 0 = never):")
     timeoutEdit := g.AddEdit("w80 Number", TimeoutSeconds)
     startupCheck := g.AddCheckbox("xm y+14", "Start with Windows (stays hidden while Claude is closed)")

@@ -3,8 +3,10 @@
 
 global UIA := ComObject("{ff48dba4-60ef-4201-aa87-54103eef594e}", "{30cbe57d-d9d0-452a-ab13-7ac5ac4825ee}")
 
-; Button names the app uses for each state (English UI).
+; Button names the app uses for each state (English UI). With the app's "Hold to record"
+; setting on, the idle button is renamed, but its accessibility toggle still starts/stops.
 DICTATE_IDLE_NAME := "Dictate"
+DICTATE_HOLD_IDLE_NAME := "Press and hold to record"
 DICTATE_ACTIVE_NAME := "Stop dictation"
 
 UIA_NamePropertyId := 30005
@@ -23,8 +25,10 @@ FindDictateButton(hwnd) {
     static condition := 0
     if !condition {
         isButton := CreateIntCondition(UIA_ControlTypePropertyId, UIA_ButtonControlTypeId)
-        names := 0
+        idleNames := 0, names := 0
         ComCall(28, UIA, "ptr", CreateNameCondition(DICTATE_IDLE_NAME)
+            , "ptr", CreateNameCondition(DICTATE_HOLD_IDLE_NAME), "ptr*", &idleNames)   ; CreateOrCondition
+        ComCall(28, UIA, "ptr", idleNames
             , "ptr", CreateNameCondition(DICTATE_ACTIVE_NAME), "ptr*", &names)   ; CreateOrCondition
         ComCall(25, UIA, "ptr", isButton, "ptr", names, "ptr*", &condition)   ; CreateAndCondition
     }
