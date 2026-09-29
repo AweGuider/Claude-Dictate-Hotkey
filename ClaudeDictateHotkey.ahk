@@ -20,8 +20,8 @@ global IniPath := FileExist(A_ScriptDir "\settings.ini")
     : A_AppData "\ClaudeDictateHotkey\settings.ini"
 global ClaudeWindow := "ahk_exe claude.exe ahk_class Chrome_WidgetWin_1"
 global CurrentHotkey := ""
-global TimeoutSeconds := 900
-global SilenceSeconds := 10
+global TimeoutSeconds := 600
+global SilenceSeconds := 30
 global ShowCountdownBar := true
 global ShowCountdownText := true
 global PlayWarningSound := true
@@ -100,8 +100,8 @@ SetStartupEnabled(enabled) {
 
 LoadSettings() {
     global TimeoutSeconds, SilenceSeconds, ShowCountdownBar, ShowCountdownText, PlayWarningSound
-    TimeoutSeconds := Integer(IniRead(IniPath, "Settings", "TimeoutSeconds", 900))
-    SilenceSeconds := Integer(IniRead(IniPath, "Settings", "SilenceSeconds", 10))
+    TimeoutSeconds := Integer(IniRead(IniPath, "Settings", "TimeoutSeconds", 600))
+    SilenceSeconds := Integer(IniRead(IniPath, "Settings", "SilenceSeconds", 30))
     ShowCountdownBar := IniRead(IniPath, "Settings", "ShowCountdownBar", 1) = 1
     ShowCountdownText := IniRead(IniPath, "Settings", "ShowCountdownText", 1) = 1
     PlayWarningSound := IniRead(IniPath, "Settings", "PlayWarningSound", 1) = 1
