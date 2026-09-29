@@ -52,12 +52,19 @@ FindDictateButton(hwnd) {
         Loop count {
             el := 0
             ComCall(4, found, "int", A_Index - 1, "ptr*", &el)   ; GetElement
-            if IsDictating(el) {
+            ; Claude rebuilds the button on state changes; skip one that vanished mid-search.
+            try {
+                dictating := IsDictating(el)
+                distance := Abs(GetRect(el).centerX - targetX)
+            } catch {
+                ObjRelease(el)
+                continue
+            }
+            if dictating {
                 if best
                     ObjRelease(best)
                 return el
             }
-            distance := Abs(GetRect(el).centerX - targetX)
             if !best || distance < bestDistance {
                 if best
                     ObjRelease(best)
@@ -77,6 +84,40 @@ IsDictating(element) {
     ComCall(23, element, "ptr*", &name)   ; get_CurrentName
     try return StrGet(name, "UTF-16") = DICTATE_ACTIVE_NAME
     finally DllCall("oleaut32\SysFreeString", "ptr", name)
+}
+
+; The composer text box above the given Dictate button (caller must ObjRelease) or 0.
+FindComposer(hwnd, button) {
+    static isEdit := CreateIntCondition(UIA_ControlTypePropertyId, 50004)
+    b := GetRect(button)
+    root := 0, found := 0, count := 0
+    ComCall(6, UIA, "ptr", hwnd, "ptr*", &root)   ; ElementFromHandle
+    try ComCall(6, root, "int", TreeScope_Descendants, "ptr", isEdit, "ptr*", &found)   ; FindAll
+    finally ObjRelease(root)
+    try {
+        ComCall(3, found, "int*", &count)
+        Loop count {
+            el := 0
+            ComCall(4, found, "int", A_Index - 1, "ptr*", &el)
+            try {
+                r := GetRect(el)
+                if r.left <= b.left + 5 && r.right >= b.right && r.bottom <= b.top + 5 && b.top - r.bottom < 300
+                    return el
+            }
+            ObjRelease(el)
+        }
+    } finally {
+        ObjRelease(found)
+    }
+    return 0
+}
+
+; Text of an Edit element (UIA ValuePattern.Value property).
+GetValue(element) {
+    v := Buffer(24, 0)
+    ComCall(10, element, "int", 30045, "ptr", v)   ; GetCurrentPropertyValue(UIA_ValueValuePropertyId)
+    try return NumGet(v, 0, "ushort") = 8 ? StrGet(NumGet(v, 8, "ptr"), "UTF-16") : ""
+    finally DllCall("oleaut32\VariantClear", "ptr", v)
 }
 
 ; Chromium intermittently omits the Toggle pattern, so fall back to the MSAA default action.
@@ -121,7 +162,7 @@ GetRect(element) {
     r := Buffer(16)
     ComCall(43, element, "ptr", r)   ; get_CurrentBoundingRectangle
     left := NumGet(r, 0, "int"), right := NumGet(r, 8, "int")
-    return {left: left, right: right, centerX: (left + right) // 2}
+    return {left: left, top: NumGet(r, 4, "int"), right: right, bottom: NumGet(r, 12, "int"), centerX: (left + right) // 2}
 }
 
 CreateIntCondition(propertyId, value) {
