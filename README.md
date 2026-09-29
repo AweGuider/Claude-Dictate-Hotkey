@@ -15,12 +15,14 @@ The hotkey only fires while the Claude window is focused; everywhere else the ke
 
 ## Usage
 
-- Start: double-click `ClaudeDictateHotkey.ahk` (tray icon appears).
+- Start: double-click `ClaudeDictateHotkey.ahk`.
 - Settings: double-click `Settings.bat`, or double-click / right-click the tray icon → **Settings...**
   - Type a hotkey in AutoHotkey syntax (`^` Ctrl, `+` Shift, `!` Alt, `#` Win) or click **Record new hotkey...** and press the combo.
   - Auto-stop timeout in seconds; `0` disables it.
+  - **Start with Windows**: adds or removes a shortcut in your Startup folder.
   - Saved to `settings.ini` and applied immediately.
-- Run at login: press Win+R, open `shell:startup`, and put a shortcut to `ClaudeDictateHotkey.ahk` there.
+- The tray icon is shown only while a Claude window is open. With Claude closed, the script idles in the
+  background and reappears when Claude opens, however Claude is launched.
 
 ## How it works
 

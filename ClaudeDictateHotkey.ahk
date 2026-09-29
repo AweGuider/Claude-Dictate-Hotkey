@@ -9,6 +9,7 @@ global ClaudeWindow := "ahk_exe claude.exe ahk_class Chrome_WidgetWin_1"
 global CurrentHotkey := ""
 global TimeoutSeconds := 90
 global AutoStopHwnd := 0
+global StartupShortcut := A_Startup "\Claude Dictate Hotkey.lnk"
 
 A_TrayMenu.Delete()
 A_TrayMenu.Add("Settings...", ShowSettings)
@@ -17,9 +18,38 @@ A_TrayMenu.Add("Exit", (*) => ExitApp())
 A_TrayMenu.Default := "Settings..."
 
 LoadSettings()
-for arg in A_Args
+launchedAtLogin := false
+for arg in A_Args {
     if arg = "/settings"
         ShowSettings()
+    else if arg = "/startup"
+        launchedAtLogin := true
+}
+
+; Tray icon is shown only while a Claude window exists; the hotkey itself is
+; already scoped to the Claude window, so nothing else needs toggling.
+UpdateTrayVisibility()
+SetTimer(UpdateTrayVisibility, 2000)
+if A_IconHidden && !launchedAtLogin
+    ShowTip("Claude Dictate Hotkey is running and will appear when Claude opens")
+
+UpdateTrayVisibility() {
+    A_IconHidden := !WinExist(ClaudeWindow)
+}
+
+IsStartupEnabled() => FileExist(StartupShortcut) != ""
+
+SetStartupEnabled(enabled) {
+    if !enabled {
+        if IsStartupEnabled()
+            FileDelete(StartupShortcut)
+        return
+    }
+    if A_IsCompiled
+        FileCreateShortcut(A_ScriptFullPath, StartupShortcut, A_ScriptDir, "/startup", "Claude Dictate Hotkey")
+    else
+        FileCreateShortcut(A_AhkPath, StartupShortcut, A_ScriptDir, '"' A_ScriptFullPath '" /startup', "Claude Dictate Hotkey")
+}
 
 LoadSettings() {
     global TimeoutSeconds
@@ -101,6 +131,8 @@ ShowSettings(*) {
     g.AddButton("xm w200", "Record new hotkey...").OnEvent("Click", (*) => RecordHotkey(keyEdit, readable))
     g.AddText("xm y+14", "Auto-stop dictation after (seconds, 0 = never):")
     timeoutEdit := g.AddEdit("w80 Number", TimeoutSeconds)
+    startupCheck := g.AddCheckbox("xm y+14", "Start with Windows (stays hidden while Claude is closed)")
+    startupCheck.Value := IsStartupEnabled()
     g.AddText("xm y+14 cGray", "Syntax: ^ = Ctrl, + = Shift, ! = Alt, # = Win  (e.g. ^+Space)")
     g.AddButton("xm y+14 w90 Default", "Save").OnEvent("Click", Save)
     g.AddButton("x+10 w90", "Cancel").OnEvent("Click", (*) => g.Destroy())
@@ -119,6 +151,7 @@ ShowSettings(*) {
         TimeoutSeconds := Integer(timeoutEdit.Value || 0)
         IniWrite(key, IniPath, "Settings", "Hotkey")
         IniWrite(TimeoutSeconds, IniPath, "Settings", "TimeoutSeconds")
+        SetStartupEnabled(startupCheck.Value)
         g.Destroy()
         ShowTip("Saved: " HotkeyText(key) ", auto-stop " (TimeoutSeconds ? TimeoutSeconds "s" : "off"))
     }
