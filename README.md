@@ -9,18 +9,36 @@ The hotkey only fires while the Claude window is focused; everywhere else the ke
 
 ## Requirements
 
-- AutoHotkey v2 (64-bit), installed at `C:\Program Files\AutoHotkey\v2\`
+- Windows 10/11 (64-bit)
 - Claude desktop app with **Dictation settings → Hold to record** turned **off** (toggle mode)
 - Claude UI in English (the button is located by its accessible names `Dictate` / `Stop dictation`)
 
+## Install
+
+Download from [Releases](https://github.com/AweGuider/Claude-Dictate-Hotkey/releases):
+
+- **Installer** (`ClaudeDictateHotkey-<version>-setup.exe`): per-user install, no admin rights needed.
+  Adds Start Menu entries for the app and its Settings, and optionally starts it with Windows.
+- **Portable** (`ClaudeDictateHotkey-<version>-portable.zip`): unzip anywhere and run `ClaudeDictateHotkey.exe`.
+- **From source**: install [AutoHotkey v2](https://www.autohotkey.com/) and run `ClaudeDictateHotkey.ahk`.
+
+### Antivirus / SmartScreen warnings
+
+Compiled AutoHotkey programs are often flagged as false positives, and the releases are not code-signed yet.
+Some antivirus products (e.g. Avast) may also flag the installer, its temporary `setup.tmp`, and the uninstaller.
+Every release lists SHA256 hashes in `SHA256SUMS.txt` so you can verify the download, and the source is in
+this repository if you prefer to run the `.ahk` directly. False positives can be reported to
+[Microsoft](https://www.microsoft.com/wdsi/filesubmission) and [Avast](https://www.avast.com/false-positive-file-form.php).
+
 ## Usage
 
-- Start: double-click `ClaudeDictateHotkey.ahk`.
-- Settings: double-click `Settings.bat`, or double-click / right-click the tray icon → **Settings...**
+- Settings: Start Menu → **Claude Dictate Hotkey Settings**, `Settings.bat` (portable/source), or
+  double-click / right-click the tray icon → **Settings...**
   - Type a hotkey in AutoHotkey syntax (`^` Ctrl, `+` Shift, `!` Alt, `#` Win) or click **Record new hotkey...** and press the combo.
   - Auto-stop timeout in seconds; `0` disables it.
   - **Start with Windows**: adds or removes a shortcut in your Startup folder.
-  - Saved to `settings.ini` and applied immediately.
+  - Applied immediately and saved to `%APPDATA%\ClaudeDictateHotkey\settings.ini`. If a `settings.ini`
+    exists next to the program, that one is used instead (portable mode).
 - The tray icon is shown only while a Claude window is open. With Claude closed, the script idles in the
   background and reappears when Claude opens, however Claude is launched.
 
@@ -45,6 +63,18 @@ that is already recording is stopped first; otherwise the one in the focused pan
 
 If an app update renames the button, the hotkey beeps and shows "Dictate button not found";
 update `DICTATE_IDLE_NAME` / `DICTATE_ACTIVE_NAME` in `ClaudeUia.ahk`.
+
+## Building
+
+Requires [Ahk2Exe](https://github.com/AutoHotkey/Ahk2Exe/releases) and [Inno Setup](https://jrsoftware.org/isdl.php).
+
+```powershell
+.\build.ps1 -Ahk2Exe <path>\Ahk2Exe.exe
+```
+
+Outputs the exe, portable zip, installer and `SHA256SUMS.txt` to `dist\`. The version comes from the
+`;@Ahk2Exe-SetVersion` line in `ClaudeDictateHotkey.ahk`. Ahk2Exe defaults to
+`C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe` (or `$env:AHK2EXE`); pass `-SkipInstaller` to skip Inno Setup.
 
 ## License
 

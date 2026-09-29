@@ -2,15 +2,26 @@
 #SingleInstance Force
 Persistent
 
+;@Ahk2Exe-SetName Claude Dictate Hotkey
+;@Ahk2Exe-SetDescription Claude Dictate Hotkey
+;@Ahk2Exe-SetVersion 0.2.0
+;@Ahk2Exe-SetCopyright Copyright (c) 2026 AweDev. MIT License.
+;@Ahk2Exe-SetMainIcon assets\icon.ico
+
 #Include ClaudeUia.ahk
 
-global IniPath := A_ScriptDir "\settings.ini"
+; A settings.ini next to the script/exe means portable mode; otherwise use %APPDATA%.
+global IniPath := FileExist(A_ScriptDir "\settings.ini")
+    ? A_ScriptDir "\settings.ini"
+    : A_AppData "\ClaudeDictateHotkey\settings.ini"
 global ClaudeWindow := "ahk_exe claude.exe ahk_class Chrome_WidgetWin_1"
 global CurrentHotkey := ""
 global TimeoutSeconds := 90
 global AutoStopHwnd := 0
 global StartupShortcut := A_Startup "\Claude Dictate Hotkey.lnk"
 
+if !A_IsCompiled && FileExist(A_ScriptDir "\assets\icon.ico")
+    TraySetIcon(A_ScriptDir "\assets\icon.ico")
 A_TrayMenu.Delete()
 A_TrayMenu.Add("Settings...", ShowSettings)
 A_TrayMenu.Add("Reload", (*) => Reload())
@@ -149,6 +160,8 @@ ShowSettings(*) {
             return
         }
         TimeoutSeconds := Integer(timeoutEdit.Value || 0)
+        SplitPath(IniPath, , &iniDir)
+        DirCreate(iniDir)
         IniWrite(key, IniPath, "Settings", "Hotkey")
         IniWrite(TimeoutSeconds, IniPath, "Settings", "TimeoutSeconds")
         SetStartupEnabled(startupCheck.Value)
