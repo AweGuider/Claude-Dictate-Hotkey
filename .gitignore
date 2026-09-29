@@ -1,0 +1,6 @@
+# Per-user settings (defaults are built into the script)
+settings.ini
+
+# Build output
+*.exe
+dist/

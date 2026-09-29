@@ -1,0 +1,4 @@
+* text=auto
+*.ahk text eol=crlf
+*.bat text eol=crlf
+*.ini text eol=crlf
