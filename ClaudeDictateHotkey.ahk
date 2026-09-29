@@ -65,12 +65,12 @@ SetStartupEnabled(enabled) {
 LoadSettings() {
     global TimeoutSeconds
     TimeoutSeconds := Integer(IniRead(IniPath, "Settings", "TimeoutSeconds", 90))
-    key := IniRead(IniPath, "Settings", "Hotkey", "^+Space")
+    key := IniRead(IniPath, "Settings", "Hotkey", "^Space")
     try {
         RegisterHotkey(key)
     } catch {
-        MsgBox("Invalid hotkey in settings.ini: " key "`nFalling back to Ctrl+Shift+Space.", "Claude Dictate Hotkey", "Icon!")
-        RegisterHotkey("^+Space")
+        MsgBox("Invalid hotkey in settings.ini: " key "`nFalling back to Ctrl+Space.", "Claude Dictate Hotkey", "Icon!")
+        RegisterHotkey("^Space")
     }
 }
 

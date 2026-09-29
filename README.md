@@ -4,7 +4,9 @@ Global hotkey that toggles dictation in the Claude desktop app (Windows), which 
 
 > Unofficial community tool. Not affiliated with or endorsed by Anthropic.
 
-Default: **Ctrl+Shift+Space** toggles the composer's Dictate button, and dictation auto-stops after 90 seconds.
+Default: **Ctrl+Space** toggles the composer's Dictate button, and dictation auto-stops after 90 seconds.
+Both the hotkey and the timeout can be changed in [Settings](#usage).
+If you use an input method that switches on Ctrl+Space (e.g. Chinese or Japanese), pick another hotkey.
 The hotkey only fires while the Claude window is focused; everywhere else the key combo behaves normally.
 
 ## Requirements
