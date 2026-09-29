@@ -44,6 +44,11 @@ this repository if you prefer to run the `.ahk` directly. False positives can be
     Silence is detected from the transcript Claude writes into the message box, so background
     noise doesn't keep it running. Only applies to dictation started with the hotkey.
   - **Maximum dictation length** in seconds; `0` means unlimited.
+  - **Before an automatic stop**: a shrinking bar along the top of the message box, countdown text
+    next to the mic, a soft tick when the countdown starts and a double click 10 s before the stop.
+    The silence countdown appears after 10 s of silence (halfway for limits of 20 s or less) and
+    fades out when you speak again; the maximum-length one appears in the last minute. If both
+    apply, the one that ends first is shown. Each part can be turned off.
   - **Start with Windows**: adds or removes a shortcut in your Startup folder.
   - Applied immediately and saved to `%APPDATA%\ClaudeDictateHotkey\settings.ini`. If a `settings.ini`
     exists next to the program, that one is used instead (portable mode).
