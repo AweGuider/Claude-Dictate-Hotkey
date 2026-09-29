@@ -24,6 +24,18 @@ The hotkey only fires while the Claude window is focused; everywhere else the ke
 - The tray icon is shown only while a Claude window is open. With Claude closed, the script idles in the
   background and reappears when Claude opens, however Claude is launched.
 
+## Where it works
+
+| Surface | Dictation shortcut |
+| :- | :- |
+| Claude desktop app, **Code** tab | This tool |
+| Claude desktop app, **Chat** tab | This tool (same Dictate button) |
+| Claude Code **CLI** in a terminal | Built in: run `/voice`, then hold `Space` (or `/voice tap` to toggle). Rebind via `voice:pushToTalk` in `~/.claude/keybindings.json`. See the [voice dictation docs](https://code.claude.com/docs/en/voice-dictation). |
+| Claude Code **VS Code extension** | Built in (same docs page) |
+
+This tool's hotkey does nothing in terminals. For the CLI, use its built-in `/voice` and pick a key your
+terminal doesn't intercept: Windows Terminal, for example, uses `Ctrl+Shift+Space` for its new-tab menu.
+
 ## How it works
 
 `ClaudeUia.ahk` uses Windows UI Automation to find the Dictate button in the active Claude window and
