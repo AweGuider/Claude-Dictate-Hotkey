@@ -1,4 +1,6 @@
-# Claude Dictate Hotkey
+<p align="center">
+  <img src="docs/images/social-preview.png" width="100%" alt="Claude Dictate Hotkey: tap or hold Ctrl+Space to dictate in the Claude desktop app, with silence auto-stop, a maximum length cap and a countdown before either stop">
+</p>
 
 <p align="center">
   <a href="https://github.com/AweGuider/Claude-Dictate-Hotkey/actions/workflows/build.yml"><img src="https://github.com/AweGuider/Claude-Dictate-Hotkey/actions/workflows/build.yml/badge.svg" alt="Build"></a>
