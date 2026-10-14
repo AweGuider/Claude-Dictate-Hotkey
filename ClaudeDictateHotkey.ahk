@@ -146,7 +146,12 @@ OnDictateHotkey(thisHotkey) {
     pressedAt := A_TickCount
     wasDictating := ToggleDictation(hwnd)
     if wasDictating != "" && !wasDictating {
-        KeyWait(MainKey(thisHotkey))
+        key := MainKey(thisHotkey)
+        ; The button lookup alone can exceed HoldThresholdMs (~670 ms when Claude's accessibility
+        ; tree is cold); a key already released by now was a tap, not a hold.
+        if !GetKeyState(key, "P")
+            return
+        KeyWait(key)
         if A_TickCount - pressedAt >= HoldThresholdMs
             StopReliably(hwnd, 4000)
     }
@@ -497,6 +502,12 @@ PlayOverlaySound(file) {
 
 ; kind: "silence", "max", or "" for no warning. left/span in ms drive the bar's length.
 UpdateOverlay(kind, left, span) {
+    ; A stop can interrupt MonitorTick mid-run (hotkey thread); when the tick resumes it must
+    ; not redraw an overlay the stop already hid, or it stays on screen with nothing to hide it.
+    if !MonitorActive || Stopping {
+        HideOverlay()
+        return
+    }
     if kind = "" {
         if Watch.warning != ""
             HideOverlay(true)
@@ -512,7 +523,7 @@ UpdateOverlay(kind, left, span) {
         Watch.finalWarned := true
         PlayOverlaySound(FinalWarningSound)
     }
-    if !WinActive("ahk_id " Watch.hwnd) {
+    if !OverlayVisibleOnClaude() {
         HideOverlay()
         return
     }
@@ -561,6 +572,45 @@ UpdateOverlay(kind, left, span) {
         y := Watch.textPos.y - Overlay.labelH // 2
         Overlay.text.Show(Format("NA x{} y{} w{} h{}", Watch.textPos.x, y, width, Overlay.labelH))
     }
+}
+
+; True if the spots the bar and text would cover show Claude, i.e. Claude is visible there even
+; when another window (e.g. on another monitor) is active. Hidden when covered or minimized.
+OverlayVisibleOnClaude() {
+    try {
+        r := Watch.box ? GetRect(Watch.box) : Watch.composer ? GetRect(Watch.composer) : Watch.button
+        if !IsClaudeOnTopAt((r.left + r.right) // 2, (r.top + r.bottom) // 2)
+            return false
+        return !Watch.textPos || IsClaudeOnTopAt(Watch.textPos.x + 4, Watch.textPos.y)
+    } catch {
+        return false
+    }
+}
+
+; Walks top-level windows in z-order and checks whether the first one under the point is
+; Claude, skipping our overlay and windows that can't be seen or clicked (cloaked, minimized,
+; click-through layered).
+IsClaudeOnTopAt(x, y) {
+    rect := Buffer(16)
+    w := DllCall("GetTopWindow", "ptr", 0, "ptr")
+    while w {
+        if w != Overlay.bar.Hwnd && w != Overlay.text.Hwnd
+            && DllCall("IsWindowVisible", "ptr", w) && !DllCall("IsIconic", "ptr", w) && !IsCloaked(w)
+            && (WinGetExStyle(w) & 0x80020) != 0x80020 {   ; WS_EX_LAYERED | WS_EX_TRANSPARENT
+            DllCall("GetWindowRect", "ptr", w, "ptr", rect)
+            if x >= NumGet(rect, 0, "int") && x < NumGet(rect, 8, "int")
+                && y >= NumGet(rect, 4, "int") && y < NumGet(rect, 12, "int")
+                return w = Watch.hwnd
+        }
+        w := DllCall("GetWindow", "ptr", w, "uint", 2, "ptr")   ; GW_HWNDNEXT
+    }
+    return false
+}
+
+IsCloaked(hwnd) {
+    cloaked := 0
+    DllCall("dwmapi\DwmGetWindowAttribute", "ptr", hwnd, "uint", 14, "uint*", &cloaked, "uint", 4)   ; DWMWA_CLOAKED
+    return cloaked != 0
 }
 
 ; Pixel width of text in a control's font, so the opaque label covers only its text.

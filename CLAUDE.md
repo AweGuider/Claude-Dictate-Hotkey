@@ -32,6 +32,12 @@ with Anthropic.
   `FindComposer` (Edit spanning the mic, vertically closest), `FindComposerBox` (raw-view ancestor
   enclosing both with padding) and `FindCountdownTextPos` (leftmost button under the box) are
   layout-agnostic. No composer → silence stop is skipped, never assumed.
+- Button lookups can take 200–700 ms (first one after a pause is slowest), so never time user
+  input across a lookup: tap vs hold uses `GetKeyState` after the click.
+- Timer threads (`MonitorTick`) can be interrupted by the hotkey thread mid-run; anything that
+  draws must re-check `MonitorActive`/`Stopping` right before drawing.
+- The overlay shows when Claude is the topmost window at the bar and text spots
+  (`IsClaudeOnTopAt`, z-order walk, <1 ms), not only when Claude is active.
 - `ScanTick` detects any recording by reading kept button references (~0.5 ms each); a full
   search costs ~400 ms in long conversations, so it only re-searches every 20 s or on a stale ref.
   Measured: ~4 % wall time at 10 s re-search while Claude is active.

@@ -30,6 +30,11 @@ illustrative mockups and charts of measured data, not screenshots.
   countdown bar and text never appeared. The message box, its outline and the text position are
   now found relative to the mic button, in either layout.
 - If the message box can't be found, the silence stop is skipped instead of firing.
+- First hotkey press after a pause turned dictation on and immediately off: a slow button lookup
+  (~0.7 s) was mistaken for a hold. Tap vs hold now follows whether the key is still held.
+- The countdown bar and text could reappear after dictation stopped and stay on screen.
+- The countdown stays visible while Claude is visible but not the active window (e.g. you're
+  working on another monitor); it hides when Claude is covered or minimized.
 
 ### Planned
 
