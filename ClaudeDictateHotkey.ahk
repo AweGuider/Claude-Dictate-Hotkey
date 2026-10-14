@@ -43,9 +43,12 @@ global Stopping := false
 global MonitorActive := false
 global Watch := {hwnd: 0}
 ; Scan for recordings started any way (Claude's own shortcut, mouse, our hotkey).
-global Scan := {hwnd: 0, buttons: [], searchedAt: 0}
+global Scan := {hwnd: 0, buttons: [], searchedAt: 0, focusKey: "", focusCheckedAt: 0}
+global ScanFocusCheckMs := 2000   ; the focus query costs ~12 ms, too much for every tick
 global ScanIntervalMs := 500
-global ScanResearchMs := 20000   ; a full search costs ~400 ms in long conversations
+; A full search costs 300–900 ms in long conversations; new panes are caught sooner by
+; FocusedComposerIsNew.
+global ScanResearchMs := 60000
 global StartupShortcut := A_Startup "\Claude Dictate Hotkey.lnk"
 
 ; Single tick when a countdown appears; double click with echo 10 s before the stop.
@@ -160,25 +163,52 @@ OnDictateHotkey(thisHotkey) {
     }
 }
 
-; Calls fn(button) on a freshly found Dictate button. Claude rebuilds the button when its
-; state changes, so a reference can go stale mid-call; retry with a new lookup.
-; Returns fn's result, or "" if the button can't be found.
+; Calls fn(button) on the Dictate button to act on: a held reference first (~1 ms), else a
+; fresh search (300–900 ms in long chats) that also refreshes the scan's references. Claude
+; sometimes rebuilds the button on a state change, so a held reference can fail mid-call;
+; that retries with a fresh search. Returns fn's result, or "" if no button is found.
 WithDictateButton(hwnd, fn) {
     if !WinExist("ahk_id " hwnd)
         return ""
     Loop 3 {
-        button := FindDictateButton(hwnd)
+        button := A_Index = 1 ? KeptDictateButton(hwnd) : 0
+        if !button
+            button := FreshDictateButton(hwnd)
         if !button
             return ""
         try {
             return fn(button)
         } catch {
-            Sleep(100)
+            if A_Index > 1
+                Sleep(100)
         } finally {
             ObjRelease(button)
         }
     }
     return ""
+}
+
+; A held reference (caller must ObjRelease) to the button to act on, without searching: the
+; monitor's button, else the scan's pick. 0 if nothing usable is held.
+KeptDictateButton(hwnd) {
+    if MonitorActive && Watch.hwnd = hwnd && Watch.el {
+        ObjAddRef(Watch.el)
+        return Watch.el
+    }
+    if Scan.hwnd = hwnd && Scan.buttons.Length && (el := PickDictateButton(Scan.buttons, hwnd)) {
+        ObjAddRef(el)
+        return el
+    }
+    return 0
+}
+
+; Searches the window again (caller must ObjRelease the result), refreshing the scan's
+; references so the next lookups are cheap again.
+FreshDictateButton(hwnd) {
+    RefreshScanButtons(hwnd)
+    if el := PickDictateButton(Scan.buttons, hwnd)
+        ObjAddRef(el)
+    return el
 }
 
 IsRecording(hwnd) => WithDictateButton(hwnd, IsDictating) = true
@@ -278,7 +308,7 @@ ScanTick() {
     hwnd := WinActive(ClaudeWindow)
     if !hwnd
         return
-    if hwnd != Scan.hwnd || A_TickCount - Scan.searchedAt >= ScanResearchMs
+    if hwnd != Scan.hwnd || A_TickCount - Scan.searchedAt >= ScanResearchMs || FocusedComposerIsNew()
         RefreshScanButtons(hwnd)
     for button in Scan.buttons {
         try {
@@ -291,6 +321,42 @@ ScanTick() {
             return
         }
     }
+}
+
+; True once per newly focused message box that no held button belongs to (e.g. a pane opened
+; since the last search), so full searches can be rare without missing new panes.
+FocusedComposerIsNew() {
+    if A_TickCount - Scan.focusCheckedAt < ScanFocusCheckMs
+        return false
+    Scan.focusCheckedAt := A_TickCount
+    focused := 0
+    try ComCall(8, UIA, "ptr*", &focused)   ; GetFocusedElement
+    if !focused
+        return false
+    try {
+        controlType := 0
+        ComCall(21, focused, "int*", &controlType)   ; get_CurrentControlType
+        if controlType != 50004   ; Edit
+            return false
+        r := GetRect(focused)
+    } catch {
+        return false
+    } finally {
+        ObjRelease(focused)
+    }
+    key := r.left " " r.top " " r.right " " r.bottom
+    if key = Scan.focusKey
+        return false
+    Scan.focusKey := key
+    for button in Scan.buttons {
+        try {
+            b := GetRect(button)
+            if r.left <= b.left + 5 && r.right >= b.right - 5
+                && Max(0, b.top - r.bottom, r.top - b.bottom) < 300
+                return false
+        }
+    }
+    return true
 }
 
 RefreshScanButtons(hwnd) {
@@ -326,13 +392,13 @@ StopMonitor() {
         Watch.warning := ""
 }
 
-; Rect of the recording button, or 0 if not recording. Uses a kept reference; a "not recording"
+; Rect of the recording button, or 0 if not recording. Uses a held reference; a "not recording"
 ; or failed read is confirmed with a fresh search, in case the reference went stale.
 MonitorButtonRect() {
     Loop 2 {
         try {
             if !Watch.el
-                Watch.el := FindDictateButton(Watch.hwnd)
+                Watch.el := A_Index = 1 ? KeptDictateButton(Watch.hwnd) : FreshDictateButton(Watch.hwnd)
             if !Watch.el
                 return 0
             if IsDictating(Watch.el)
@@ -372,7 +438,6 @@ MonitorTick() {
             Watch.text := ReadWatchComposer()
             Watch.changedAt := now
             Watch.maxEndsAt := TimeoutSeconds > 0 ? now + TimeoutSeconds * 1000 : 0
-            Watch.textPos := FindCountdownTextPos(Watch.hwnd, button)
         }
     }
     if !Watch.seen
@@ -411,22 +476,53 @@ MonitorTick() {
     UpdateOverlay(kind, Max(left, 0), span)
 }
 
-; Countdown text anchor {x, y = vertical centre}, found once per recording: just right of the
-; mode button ("Auto"), which is the leftmost button in the row under the message box.
-; Falls back to under the box's left edge.
+; Countdown text anchor {x, y = vertical centre}, found when a countdown first appears: just
+; right of the mode button ("Auto"), the leftmost button in the row under the message box.
+; Searches the box's ancestors first (small subtrees, a few ms), the whole window only if
+; that finds nothing. Falls back to under the box's left edge.
 FindCountdownTextPos(hwnd, dictate) {
-    static isButton := CreateIntCondition(UIA_ControlTypePropertyId, UIA_ButtonControlTypeId)
     box := ""
     if Watch.box
         try box := GetRect(Watch.box)
     if !box
         box := {left: dictate.right - 600, right: dictate.right + 20, bottom: dictate.bottom}
-    fallback := {x: box.left + 12, y: box.bottom + 18}
     try {
-        root := 0, found := 0, count := 0, best := 0
+        if Watch.box {
+            walker := 0
+            ComCall(16, UIA, "ptr*", &walker)   ; get_RawViewWalker
+            el := Watch.box
+            ObjAddRef(el)
+            Loop 4 {
+                parent := 0
+                ComCall(3, walker, "ptr", el, "ptr*", &parent)   ; GetParentElement
+                ObjRelease(el)
+                if !(el := parent)
+                    break
+                if best := ModeButtonUnderBox(el, box)
+                    break
+            }
+            if el
+                ObjRelease(el)
+            ObjRelease(walker)
+            if best
+                return {x: best.right + 12, y: (best.top + best.bottom) // 2}
+        }
+        root := 0
         ComCall(6, UIA, "ptr", hwnd, "ptr*", &root)
-        try ComCall(6, root, "int", TreeScope_Descendants, "ptr", isButton, "ptr*", &found)
+        try best := ModeButtonUnderBox(root, box)
         finally ObjRelease(root)
+        if best
+            return {x: best.right + 12, y: (best.top + best.bottom) // 2}
+    }
+    return {x: box.left + 12, y: box.bottom + 18}
+}
+
+; Rect of the leftmost button in the row under the box, within scope's subtree, or 0.
+ModeButtonUnderBox(scope, box) {
+    static isButton := CreateIntCondition(UIA_ControlTypePropertyId, UIA_ButtonControlTypeId)
+    found := 0, count := 0, best := 0
+    ComCall(6, scope, "int", TreeScope_Descendants, "ptr", isButton, "ptr*", &found)   ; FindAll
+    try {
         ComCall(3, found, "int*", &count)
         Loop count {
             el := 0
@@ -439,11 +535,10 @@ FindCountdownTextPos(hwnd, dictate) {
             }
             ObjRelease(el)
         }
+    } finally {
         ObjRelease(found)
-        return best ? {x: best.right + 12, y: (best.top + best.bottom) // 2} : fallback
-    } catch {
-        return fallback
     }
+    return best
 }
 
 ; Two borderless, click-through windows that never take focus: a thin bar and a text label.
@@ -460,7 +555,8 @@ CreateOverlay() {
     label := text.AddText("x0 y0 w320", "Max length · 0:00 left")
     label.GetPos(, , , &labelH)
     ; level = current opacity 0..1, animated toward target by AnimateOverlay.
-    overlay := {bar: bar, text: text, label: label, labelH: labelH, barAlpha: 235, level: 0, target: 0}
+    overlay := {bar: bar, text: text, label: label, labelH: labelH, barAlpha: 235, level: 0, target: 0
+        , barColor: "EF9F27", barGeometry: "", textColor: "", labelText: "", labelW: 0, textGeometry: ""}
     ApplyOverlayLevel(overlay)   ; also makes both windows layered, so click-through applies
     return overlay
 }
@@ -554,14 +650,22 @@ UpdateOverlay(kind, left, span) {
                 y := c.top - Max(0, (b.top - c.bottom) // 2) - thickness // 2
             }
             width := Max(thickness, Round(full * Min(left / span, 1)))
-            Overlay.bar.BackColor := color
-            ; Round the ends to match Claude's rounded UI: a region clipped to a pill shape.
-            DetectHiddenWindows(true)
-            WinSetRegion(Format("0-0 w{} h{} r{}-{}", width, thickness, thickness, thickness), Overlay.bar)
-            Overlay.bar.Show(Format("NA x{} y{} w{} h{}", x, y, width, thickness))
+            ; Only touch what changed since the last tick: a full redraw costs ~13 ms.
+            if color != Overlay.barColor
+                Overlay.bar.BackColor := Overlay.barColor := color
+            geometry := x " " y " " width " " thickness
+            if geometry != Overlay.barGeometry || !DllCall("IsWindowVisible", "ptr", Overlay.bar.Hwnd) {
+                Overlay.barGeometry := geometry
+                ; Round the ends to match Claude's rounded UI: a region clipped to a pill shape.
+                DetectHiddenWindows(true)
+                WinSetRegion(Format("0-0 w{} h{} r{}-{}", width, thickness, thickness, thickness), Overlay.bar)
+                Overlay.bar.Show(Format("NA x{} y{} w{} h{}", x, y, width, thickness))
+            }
         }
     }
-    if ShowCountdownText && Watch.textPos {
+    if ShowCountdownText {
+        if !Watch.textPos
+            Watch.textPos := FindCountdownTextPos(Watch.hwnd, b)
         if Watch.textBg = "" {
             ; Sample the empty spot the label will cover, once per recording, while it's hidden.
             CoordMode("Pixel", "Screen")
@@ -574,12 +678,19 @@ UpdateOverlay(kind, left, span) {
         label := kind = "silence"
             ? "Silent · stops in " secs "s"
             : Format("Max length · {}:{:02} left", secs // 60, Mod(secs, 60))
-        Overlay.label.Value := label
-        Overlay.label.SetFont("c" color)
-        width := MeasureText(Overlay.label, label) + 4
-        Overlay.label.Move(, , width)
+        if color != Overlay.textColor
+            Overlay.label.SetFont("c" (Overlay.textColor := color))
+        if label != Overlay.labelText {
+            Overlay.label.Value := Overlay.labelText := label
+            Overlay.labelW := MeasureText(Overlay.label, label) + 4
+            Overlay.label.Move(, , Overlay.labelW)
+        }
         y := Watch.textPos.y - Overlay.labelH // 2
-        Overlay.text.Show(Format("NA x{} y{} w{} h{}", Watch.textPos.x, y, width, Overlay.labelH))
+        geometry := Watch.textPos.x " " y " " Overlay.labelW
+        if geometry != Overlay.textGeometry || !DllCall("IsWindowVisible", "ptr", Overlay.text.Hwnd) {
+            Overlay.textGeometry := geometry
+            Overlay.text.Show(Format("NA x{} y{} w{} h{}", Watch.textPos.x, y, Overlay.labelW, Overlay.labelH))
+        }
     }
 }
 
@@ -643,7 +754,7 @@ ReadWatchComposer() {
             if !Watch.el || A_TickCount - Watch.composerTriedAt < 1000
                 return Watch.text
             Watch.composerTriedAt := A_TickCount
-            Watch.composer := FindComposer(Watch.hwnd, Watch.el)
+            Watch.composer := FindComposerNear(Watch.el) || FindComposer(Watch.hwnd, Watch.el)
             if !Watch.composer
                 return Watch.text
             Watch.box := FindComposerBox(Watch.composer, Watch.el)

@@ -7,6 +7,17 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ## Unreleased
 
+### Changed
+
+- Much faster in long conversations, where one full search of Claude's window takes 0.3–0.9 s:
+  - Stopping clicks the held mic button right away instead of searching about six times first
+    (the stop used to land 1–3 s after the tap).
+  - The hotkey picks the mic button from the ones already found by the background check.
+  - The message box and the countdown text position are found by searching only around the mic.
+  - The countdown redraws only what changed (~45 % less work per frame).
+  - Background check: full search once a minute instead of every 20 s, plus a quick check every
+    2 s for a message box it hasn't seen yet (e.g. a newly opened pane).
+
 ## 0.4.0 (2026-10-14): companion to Claude's dictation shortcut
 
 ### Context

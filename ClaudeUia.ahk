@@ -22,45 +22,33 @@ TreeScope_Descendants := 4
 ; open (split view): a button that is already recording wins, else the one in the pane
 ; holding keyboard focus, else the one nearest the mouse.
 FindDictateButton(hwnd) {
-    found := FindDictateButtonArray(hwnd)
-    if !found
-        return 0
+    buttons := FindAllDictateButtons(hwnd)
+    best := PickDictateButton(buttons, hwnd)
+    if best
+        ObjAddRef(best)
+    for el in buttons
+        ObjRelease(el)
+    return best
+}
 
-    try {
-        count := 0
-        ComCall(3, found, "int*", &count)   ; get_Length
-        if count = 0
-            return 0
-        targetX := GetFocusCenterX(hwnd)
-        best := 0, bestDistance := 0
-        Loop count {
-            el := 0
-            ComCall(4, found, "int", A_Index - 1, "ptr*", &el)   ; GetElement
-            ; Claude rebuilds the button on state changes; skip one that vanished mid-search.
-            try {
-                dictating := IsDictating(el)
-                distance := Abs(GetRect(el).centerX - targetX)
-            } catch {
-                ObjRelease(el)
-                continue
-            }
-            if dictating {
-                if best
-                    ObjRelease(best)
+; Chooses from already-found Dictate buttons (see FindDictateButton for the order) without
+; changing their reference counts; 0 if none is usable. Skips buttons that went stale:
+; Claude sometimes rebuilds the button on a state change.
+PickDictateButton(buttons, hwnd) {
+    targetX := GetFocusCenterX(hwnd)
+    best := 0, bestDistance := 0
+    for el in buttons {
+        try {
+            if IsDictating(el)
                 return el
-            }
-            if !best || distance < bestDistance {
-                if best
-                    ObjRelease(best)
-                best := el, bestDistance := distance
-            } else {
-                ObjRelease(el)
-            }
+            distance := Abs(GetRect(el).centerX - targetX)
+        } catch {
+            continue
         }
-        return best
-    } finally {
-        ObjRelease(found)
+        if !best || distance < bestDistance
+            best := el, bestDistance := distance
     }
+    return best
 }
 
 ; Every Dictate button in the window, one per composer (caller must ObjRelease each).
@@ -143,6 +131,58 @@ FindComposer(hwnd, button) {
         ObjRelease(found)
     }
     return best
+}
+
+; Same result as FindComposer, but searches outward from the button: each raw-view ancestor's
+; subtree is small near the button, so this costs a few ms instead of a ~250 ms window-wide
+; search. Returns 0 if no matching Edit is found within a few levels.
+FindComposerNear(button) {
+    static isEdit := CreateIntCondition(UIA_ControlTypePropertyId, 50004)
+    b := GetRect(button)
+    walker := 0
+    ComCall(16, UIA, "ptr*", &walker)   ; get_RawViewWalker
+    try {
+        el := button
+        ObjAddRef(el)
+        Loop 6 {
+            parent := 0
+            ComCall(3, walker, "ptr", el, "ptr*", &parent)   ; GetParentElement
+            ObjRelease(el)
+            if !parent
+                return 0
+            el := parent
+            found := 0, count := 0, best := 0, bestGap := 0
+            ComCall(6, el, "int", TreeScope_Descendants, "ptr", isEdit, "ptr*", &found)   ; FindAll
+            try {
+                ComCall(3, found, "int*", &count)
+                Loop count {
+                    edit := 0
+                    ComCall(4, found, "int", A_Index - 1, "ptr*", &edit)
+                    try {
+                        r := GetRect(edit)
+                        gap := Max(0, b.top - r.bottom, r.top - b.bottom)
+                        if r.left <= b.left + 5 && r.right >= b.right - 5 && gap < 300 && (!best || gap < bestGap) {
+                            if best
+                                ObjRelease(best)
+                            best := edit, bestGap := gap
+                            continue
+                        }
+                    }
+                    ObjRelease(edit)
+                }
+            } finally {
+                ObjRelease(found)
+            }
+            if best {
+                ObjRelease(el)
+                return best
+            }
+        }
+        ObjRelease(el)
+        return 0
+    } finally {
+        ObjRelease(walker)
+    }
 }
 
 ; The rounded message box around the composer and its Dictate button (caller must ObjRelease)

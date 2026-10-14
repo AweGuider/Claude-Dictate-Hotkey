@@ -39,9 +39,13 @@ tool adds what it lacks. Unofficial; not affiliated with Anthropic.
   draws must re-check `MonitorActive`/`Stopping` right before drawing.
 - The overlay shows when Claude is the topmost window at the bar and text spots
   (`IsClaudeOnTopAt`, z-order walk, <1 ms), not only when Claude is active.
-- `ScanTick` detects any recording by reading kept button references (~0.5 ms each); a full
-  search costs ~400 ms in long conversations, so it only re-searches every 20 s or on a stale ref.
-  Measured: ~4 % wall time at 10 s re-search while Claude is active.
+- Full window searches cost 300–900 ms in long conversations; never put one on a hot path.
+  `WithDictateButton` acts on held references (`KeptDictateButton`: monitor's button, else the
+  scan's pick) and falls back to `FreshDictateButton`, which also refreshes the scan. Search
+  outward from the mic (`FindComposerNear`, `ModeButtonUnderBox` on the box's ancestors), not
+  window-wide.
+- `ScanTick` reads held refs every 0.5 s, re-searches every 60 s, on a stale ref, or when
+  `FocusedComposerIsNew` (throttled to 2 s: the focus query itself costs ~12 ms).
 - UIA rects are physical pixels; the script runs per-monitor DPI aware. Keep it that way.
 - Detect Claude by window (`ahk_exe claude.exe ahk_class Chrome_WidgetWin_1`); the Claude Code
   CLI is also `claude.exe`.
