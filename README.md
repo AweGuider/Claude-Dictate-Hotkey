@@ -21,18 +21,19 @@
   <br><sub>Illustrative mockup of the silence countdown.</sub>
 </p>
 
-A companion for dictation in the Claude desktop app on Windows. Start dictating however you like
-(Claude's own dictation shortcut, the mic button, or this tool's optional hotkey) and it adds what
-Claude doesn't have:
+A dictation hotkey for the Claude desktop app on Windows. Press **Ctrl+Space** in Claude: **tap**
+to start and tap again to stop, or **hold** to record and release to stop.
+
+Claude has its own dictation shortcut too, but it does tap *or* hold, not both, and never stops on
+its own. This tool adds, for any dictation in Claude, however you started it:
 
 - **Silence stop:** dictation stops by itself after 30 seconds without new words.
 - **Maximum length:** dictation stops after 10 minutes at most.
 - **Countdown before either stop:** a shrinking bar on the message box, a short text next to it,
   and soft warning sounds, so a stop never catches you off guard.
-- **Optional tap-or-hold hotkey:** one key that toggles on a tap and records while held. Claude's
-  own shortcut does one or the other, not both.
 
-All of it can be changed or turned off in [Settings](#usage).
+The hotkey, both limits and the countdown can be changed or turned off in [Settings](#usage).
+If you'd rather use Claude's own shortcut, untick **Use own hotkey** and keep the rest.
 
 > Unofficial community tool. Not affiliated with or endorsed by Anthropic.
 
@@ -66,7 +67,7 @@ this repository if you prefer to run the `.ahk` directly. False positives can be
 
 - Settings: Start Menu → **Claude Dictate Hotkey Settings**, `Settings.bat` (portable/source), or
   double-click / right-click the tray icon → **Settings...**
-  - **Use own hotkey** (off for new installs): tap to start and tap again to stop, or hold to record
+  - **Use own hotkey** (on by default, `Ctrl+Space`): tap to start and tap again to stop, or hold to record
     and release to stop. Works whether Claude's **Hold to record** setting is on or off. Type a
     hotkey in AutoHotkey syntax (`^` Ctrl, `+` Shift, `!` Alt, `#` Win) or click **Record new
     hotkey...** and press the combo. It only fires while Claude is focused. Pick a key different

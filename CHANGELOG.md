@@ -7,6 +7,13 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ## Unreleased
 
+## 0.4.2 (2026-10-14)
+
+### Changed
+
+- New installs start with the tool's own hotkey on (`Ctrl+Space`, tap or hold); a saved
+  hotkey, or a saved "no hotkey", is kept. The README leads with the hotkey again.
+
 ## 0.4.1 (2026-10-14): performance
 
 First public release. For what the tool does, see the

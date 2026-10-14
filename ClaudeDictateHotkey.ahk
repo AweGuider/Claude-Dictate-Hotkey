@@ -4,7 +4,7 @@ Persistent
 
 ;@Ahk2Exe-SetName Claude Dictate Hotkey
 ;@Ahk2Exe-SetDescription Claude Dictate Hotkey
-;@Ahk2Exe-SetVersion 0.4.1
+;@Ahk2Exe-SetVersion 0.4.2
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 AweDev. MIT License.
 ;@Ahk2Exe-SetMainIcon assets\icon.ico
 
@@ -113,8 +113,9 @@ LoadSettings() {
     ShowCountdownBar := IniRead(IniPath, "Settings", "ShowCountdownBar", 1) = 1
     ShowCountdownText := IniRead(IniPath, "Settings", "ShowCountdownText", 1) = 1
     PlayWarningSound := IniRead(IniPath, "Settings", "PlayWarningSound", 1) = 1
-    ; Empty = no own hotkey: Claude's dictation shortcut starts recording, this tool only watches.
-    key := IniRead(IniPath, "Settings", "Hotkey", "")
+    ; Ctrl+Space for new installs. A saved empty value (unticked in Settings) means no own hotkey:
+    ; Claude's dictation shortcut starts recording and this tool only watches.
+    key := IniRead(IniPath, "Settings", "Hotkey", "^Space")
     try {
         RegisterHotkey(key)
     } catch {
