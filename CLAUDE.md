@@ -27,6 +27,14 @@ with Anthropic.
   recording starting are dropped or delayed. All stops go through `StopReliably`.
 - Silence = no change in the composer text (Claude streams the transcript live). Mic meters were
   rejected (device unknown).
+- Layout changes break geometry silently. Since Claude 2.37337 the mic sits at the right end of the
+  text row and "Auto" is in a row below the box; before, the mic was in a row below the text.
+  `FindComposer` (Edit spanning the mic, vertically closest), `FindComposerBox` (raw-view ancestor
+  enclosing both with padding) and `FindCountdownTextPos` (leftmost button under the box) are
+  layout-agnostic. No composer → silence stop is skipped, never assumed.
+- `ScanTick` detects any recording by reading kept button references (~0.5 ms each); a full
+  search costs ~400 ms in long conversations, so it only re-searches every 20 s or on a stale ref.
+  Measured: ~4 % wall time at 10 s re-search while Claude is active.
 - UIA rects are physical pixels; the script runs per-monitor DPI aware. Keep it that way.
 - Detect Claude by window (`ahk_exe claude.exe ahk_class Chrome_WidgetWin_1`); the Claude Code
   CLI is also `claude.exe`.

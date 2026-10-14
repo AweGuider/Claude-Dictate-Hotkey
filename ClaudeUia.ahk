@@ -22,23 +22,7 @@ TreeScope_Descendants := 4
 ; open (split view): a button that is already recording wins, else the one in the pane
 ; holding keyboard focus, else the one nearest the mouse.
 FindDictateButton(hwnd) {
-    static condition := 0
-    if !condition {
-        isButton := CreateIntCondition(UIA_ControlTypePropertyId, UIA_ButtonControlTypeId)
-        idleNames := 0, names := 0
-        ComCall(28, UIA, "ptr", CreateNameCondition(DICTATE_IDLE_NAME)
-            , "ptr", CreateNameCondition(DICTATE_HOLD_IDLE_NAME), "ptr*", &idleNames)   ; CreateOrCondition
-        ComCall(28, UIA, "ptr", idleNames
-            , "ptr", CreateNameCondition(DICTATE_ACTIVE_NAME), "ptr*", &names)   ; CreateOrCondition
-        ComCall(25, UIA, "ptr", isButton, "ptr", names, "ptr*", &condition)   ; CreateAndCondition
-    }
-    root := 0
-    ComCall(6, UIA, "ptr", hwnd, "ptr*", &root)   ; ElementFromHandle
-    if !root
-        return 0
-    found := 0
-    try ComCall(6, root, "int", TreeScope_Descendants, "ptr", condition, "ptr*", &found)   ; FindAll
-    finally ObjRelease(root)
+    found := FindDictateButtonArray(hwnd)
     if !found
         return 0
 
@@ -79,6 +63,48 @@ FindDictateButton(hwnd) {
     }
 }
 
+; Every Dictate button in the window, one per composer (caller must ObjRelease each).
+FindAllDictateButtons(hwnd) {
+    buttons := []
+    found := FindDictateButtonArray(hwnd)
+    if !found
+        return buttons
+    try {
+        count := 0
+        ComCall(3, found, "int*", &count)   ; get_Length
+        Loop count {
+            el := 0
+            ComCall(4, found, "int", A_Index - 1, "ptr*", &el)   ; GetElement
+            buttons.Push(el)
+        }
+    } finally {
+        ObjRelease(found)
+    }
+    return buttons
+}
+
+; IUIAutomationElementArray of Dictate buttons (caller must ObjRelease) or 0.
+FindDictateButtonArray(hwnd) {
+    static condition := 0
+    if !condition {
+        isButton := CreateIntCondition(UIA_ControlTypePropertyId, UIA_ButtonControlTypeId)
+        idleNames := 0, names := 0
+        ComCall(28, UIA, "ptr", CreateNameCondition(DICTATE_IDLE_NAME)
+            , "ptr", CreateNameCondition(DICTATE_HOLD_IDLE_NAME), "ptr*", &idleNames)   ; CreateOrCondition
+        ComCall(28, UIA, "ptr", idleNames
+            , "ptr", CreateNameCondition(DICTATE_ACTIVE_NAME), "ptr*", &names)   ; CreateOrCondition
+        ComCall(25, UIA, "ptr", isButton, "ptr", names, "ptr*", &condition)   ; CreateAndCondition
+    }
+    root := 0
+    ComCall(6, UIA, "ptr", hwnd, "ptr*", &root)   ; ElementFromHandle
+    if !root
+        return 0
+    found := 0
+    try ComCall(6, root, "int", TreeScope_Descendants, "ptr", condition, "ptr*", &found)   ; FindAll
+    finally ObjRelease(root)
+    return found
+}
+
 IsDictating(element) {
     name := 0
     ComCall(23, element, "ptr*", &name)   ; get_CurrentName
@@ -86,11 +112,13 @@ IsDictating(element) {
     finally DllCall("oleaut32\SysFreeString", "ptr", name)
 }
 
-; The composer text box above the given Dictate button (caller must ObjRelease) or 0.
+; The composer text box belonging to the given Dictate button (caller must ObjRelease) or 0:
+; the Edit spanning the button horizontally, vertically closest. Claude has placed the button
+; both in a row below the text (until 2026-09) and at the right end of the text row (2026-10).
 FindComposer(hwnd, button) {
     static isEdit := CreateIntCondition(UIA_ControlTypePropertyId, 50004)
     b := GetRect(button)
-    root := 0, found := 0, count := 0
+    root := 0, found := 0, count := 0, best := 0, bestGap := 0
     ComCall(6, UIA, "ptr", hwnd, "ptr*", &root)   ; ElementFromHandle
     try ComCall(6, root, "int", TreeScope_Descendants, "ptr", isEdit, "ptr*", &found)   ; FindAll
     finally ObjRelease(root)
@@ -101,15 +129,50 @@ FindComposer(hwnd, button) {
             ComCall(4, found, "int", A_Index - 1, "ptr*", &el)
             try {
                 r := GetRect(el)
-                if r.left <= b.left + 5 && r.right >= b.right && r.bottom <= b.top + 5 && b.top - r.bottom < 300
-                    return el
+                gap := Max(0, b.top - r.bottom, r.top - b.bottom)
+                if r.left <= b.left + 5 && r.right >= b.right - 5 && gap < 300 && (!best || gap < bestGap) {
+                    if best
+                        ObjRelease(best)
+                    best := el, bestGap := gap
+                    continue
+                }
             }
             ObjRelease(el)
         }
     } finally {
         ObjRelease(found)
     }
-    return 0
+    return best
+}
+
+; The rounded message box around the composer and its Dictate button (caller must ObjRelease)
+; or 0: the nearest ancestor that encloses both with visible padding. Control view hides it,
+; so walk the raw view.
+FindComposerBox(composer, button) {
+    c := GetRect(composer), b := GetRect(button)
+    top := Min(c.top, b.top), bottom := Max(c.bottom, b.bottom)
+    walker := 0
+    ComCall(16, UIA, "ptr*", &walker)   ; get_RawViewWalker
+    try {
+        el := composer
+        ObjAddRef(el)
+        Loop 8 {
+            parent := 0
+            ComCall(3, walker, "ptr", el, "ptr*", &parent)   ; GetParentElement
+            ObjRelease(el)
+            if !parent
+                return 0
+            r := GetRect(parent)
+            if r.left <= Min(c.left, b.left) && r.right >= Max(c.right, b.right)
+                && r.top <= top - 4 && r.bottom >= bottom + 4
+                return parent
+            el := parent
+        }
+        ObjRelease(el)
+        return 0
+    } finally {
+        ObjRelease(walker)
+    }
 }
 
 ; Text of an Edit element (UIA ValuePattern.Value property).

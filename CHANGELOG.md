@@ -16,10 +16,25 @@ illustrative mockups and charts of measured data, not screenshots.
 - The Dictate button's accessibility shortcut property reports `Shift+F10`, not the configured key,
   so the native shortcut can't be read from outside.
 
+### Changed
+
+- Silence stop, maximum length and the countdown overlay now apply to **any** dictation in the
+  active Claude window: started with Claude's own shortcut, the mouse, or this tool's hotkey.
+  Recordings are detected within 0.5 s (up to 20 s in a newly opened pane).
+- Maximum length counts from when recording actually began.
+
+### Fixed
+
+- Claude 2.37337 moved the mic button onto the message row and the mode buttons ("Auto") below
+  the box. The message box wasn't found any more, so speech was treated as silence and the
+  countdown bar and text never appeared. The message box, its outline and the text position are
+  now found relative to the mic button, in either layout.
+- If the message box can't be found, the silence stop is skipped instead of firing.
+
 ### Planned
 
-- Reposition as a companion to the native shortcut: silence stop, maximum length and the countdown
-  overlay for any recording, however it started; our hotkey becomes optional.
+- Our hotkey becomes optional (none by default for new installs); README repositioned as a
+  companion to Claude's shortcut.
 
 ## 0.3.0 (2026-09-29)
 

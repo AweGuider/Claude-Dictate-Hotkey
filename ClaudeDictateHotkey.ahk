@@ -40,8 +40,12 @@ global LastStopTick := 0
 global StartClickTick := 0
 global PendingStartUntil := 0
 global Stopping := false
-global AutoStopHwnd := 0
+global MonitorActive := false
 global Watch := {hwnd: 0}
+; Scan for recordings started any way (Claude's own shortcut, mouse, our hotkey).
+global Scan := {hwnd: 0, buttons: [], searchedAt: 0}
+global ScanIntervalMs := 500
+global ScanResearchMs := 20000   ; a full search costs ~400 ms in long conversations
 global StartupShortcut := A_Startup "\Claude Dictate Hotkey.lnk"
 
 ; Single tick when a countdown appears; double click with echo 10 s before the stop.
@@ -77,6 +81,7 @@ for arg in A_Args {
 ; already scoped to the Claude window, so nothing else needs toggling.
 UpdateTrayVisibility()
 SetTimer(UpdateTrayVisibility, 2000)
+SetTimer(ScanTick, ScanIntervalMs)
 if A_IconHidden && !launchedAtLogin
     ShowTip("Claude Dictate Hotkey is running and will appear when Claude opens")
 
@@ -188,7 +193,7 @@ StopIfRecording(button) {
 
 ; Returns whether dictation was running before the toggle, or "" if no button was found.
 ToggleDictation(hwnd) {
-    global AutoStopHwnd, StartClickTick, PendingStartUntil
+    global StartClickTick, PendingStartUntil
     wasDictating := WithDictateButton(hwnd, StartIfIdle)
     if wasDictating = "" {
         Sleep(300)   ; Chromium builds its accessibility tree on first request
@@ -208,17 +213,13 @@ ToggleDictation(hwnd) {
         PendingStartUntil := LastStopTick + ClaudeCooldownMs + 300
         ShowTip("Starting... Claude is finishing the previous recording")
     }
-    if TimeoutSeconds > 0 {
-        AutoStopHwnd := hwnd
-        SetTimer(AutoStop, -TimeoutSeconds * 1000)
-    }
     StartMonitor(hwnd)
     return false
 }
 
 ; Stops dictation in a way Claude accepts: waits up to startWaitMs for a queued start to
 ; begin, lets the recording reach MinRecordingMs, then stops and re-sends once if ignored.
-; Stopping blocks the auto-stop and silence timers from sending a second, conflicting stop.
+; Stopping blocks the monitor and scan from sending a second, conflicting stop.
 StopReliably(hwnd, startWaitMs) {
     global PendingStartUntil, Stopping
     if Stopping
@@ -229,7 +230,6 @@ StopReliably(hwnd, startWaitMs) {
         while !IsRecording(hwnd) && A_TickCount < deadline
             Sleep(50)
         PendingStartUntil := 0
-        SetTimer(AutoStop, 0)
         StopMonitor()
         if !IsRecording(hwnd)
             return false
@@ -260,29 +260,88 @@ StopDictation(hwnd) {
     return stopped = true
 }
 
-AutoStop() {
-    if !Stopping && IsRecording(AutoStopHwnd) && StopReliably(AutoStopHwnd, 0)
-        ShowTip("Dictation auto-stopped after " TimeoutSeconds "s")
+; Starts the monitor for any recording in the active Claude window, however it was started.
+; Reads kept button references (~1 ms for all panes) and searches again every
+; ScanResearchMs or when a reference fails. Idle while Claude isn't the active window:
+; recordings can only start while it is.
+ScanTick() {
+    if MonitorActive || Stopping
+        return
+    hwnd := WinActive(ClaudeWindow)
+    if !hwnd
+        return
+    if hwnd != Scan.hwnd || A_TickCount - Scan.searchedAt >= ScanResearchMs
+        RefreshScanButtons(hwnd)
+    for button in Scan.buttons {
+        try {
+            if IsDictating(button) {
+                StartMonitor(hwnd)
+                return
+            }
+        } catch {
+            Scan.searchedAt := 0   ; stale reference: search again next tick
+            return
+        }
+    }
 }
 
-; Monitors a recording started by the hotkey: silence auto-stop and the countdown overlay.
+RefreshScanButtons(hwnd) {
+    for button in Scan.buttons
+        ObjRelease(button)
+    Scan.hwnd := hwnd
+    Scan.buttons := FindAllDictateButtons(hwnd)
+    Scan.searchedAt := A_TickCount
+}
+
+; Monitors a recording: silence auto-stop, maximum length, and the countdown overlay.
 ; Silence = no change to the composer text, since Claude writes the transcript there live.
-; The button lookup (~100 ms) runs once a second; text reads (<1 ms) run every tick.
+; The button check runs once a second; text reads (<1 ms) run every tick.
 StartMonitor(hwnd) {
-    global Watch
+    global Watch, MonitorActive
     StopMonitor()
     Watch := {hwnd: hwnd, composer: 0, text: "", changedAt: A_TickCount, startedAt: A_TickCount
-        , seen: false, lastCheck: 0, button: 0, textX: 0, warning: "", finalWarned: false, textBg: ""
-        , maxEndsAt: TimeoutSeconds > 0 ? A_TickCount + TimeoutSeconds * 1000 : 0}
+        , seen: false, lastCheck: 0, el: 0, button: 0, box: 0, composerTriedAt: 0, textPos: ""
+        , warning: "", finalWarned: false, textBg: "", maxEndsAt: 0}
+    MonitorActive := true
     SetTimer(MonitorTick, 250)
 }
 
 StopMonitor() {
+    global MonitorActive
     SetTimer(MonitorTick, 0)
+    MonitorActive := false
+    Scan.searchedAt := 0   ; Claude rebuilt the buttons; refresh the scan's references
     HideOverlay()
     ReleaseWatchComposer()
+    ReleaseMonitorButton()
     if Watch.HasOwnProp("warning")
         Watch.warning := ""
+}
+
+; Rect of the recording button, or 0 if not recording. Uses a kept reference; a "not recording"
+; or failed read is confirmed with a fresh search, in case the reference went stale.
+MonitorButtonRect() {
+    Loop 2 {
+        try {
+            if !Watch.el
+                Watch.el := FindDictateButton(Watch.hwnd)
+            if !Watch.el
+                return 0
+            if IsDictating(Watch.el)
+                return GetRect(Watch.el)
+            if A_Index = 2
+                return 0
+        }
+        ReleaseMonitorButton()
+    }
+    return 0
+}
+
+ReleaseMonitorButton() {
+    if Watch.HasOwnProp("el") && Watch.el {
+        ObjRelease(Watch.el)
+        Watch.el := 0
+    }
 }
 
 MonitorTick() {
@@ -291,7 +350,7 @@ MonitorTick() {
     now := A_TickCount
     if now - Watch.lastCheck >= 1000 {
         Watch.lastCheck := now
-        button := WithDictateButton(Watch.hwnd, (b) => IsDictating(b) ? GetRect(b) : 0)
+        button := WinExist("ahk_id " Watch.hwnd) ? MonitorButtonRect() : 0
         if !button {
             HideOverlay()
             ; Allow time for a start queued behind Claude's cooldown before giving up.
@@ -304,7 +363,8 @@ MonitorTick() {
             Watch.seen := true
             Watch.text := ReadWatchComposer()
             Watch.changedAt := now
-            Watch.textX := FindCountdownTextX(Watch.hwnd, button)
+            Watch.maxEndsAt := TimeoutSeconds > 0 ? now + TimeoutSeconds * 1000 : 0
+            Watch.textPos := FindCountdownTextPos(Watch.hwnd, button)
         }
     }
     if !Watch.seen
@@ -313,19 +373,27 @@ MonitorTick() {
     if text != Watch.text
         Watch.text := text, Watch.changedAt := now
 
+    ; Without the composer there's no transcript to watch: never treat that as silence.
+    silenceOn := SilenceSeconds > 0 && Watch.composer
     silenceMs := SilenceSeconds * 1000
     silenceLeft := silenceMs - (now - Watch.changedAt)
-    if SilenceSeconds > 0 && silenceLeft <= 0 {
+    if silenceOn && silenceLeft <= 0 {
         StopMonitor()
         if StopReliably(Watch.hwnd, 0)
             ShowTip("Dictation stopped after " SilenceSeconds "s of silence")
+        return
+    }
+    if Watch.maxEndsAt && now >= Watch.maxEndsAt {
+        StopMonitor()
+        if StopReliably(Watch.hwnd, 0)
+            ShowTip("Dictation stopped at the maximum length (" TimeoutSeconds "s)")
         return
     }
 
     ; Pick the countdown that ends first, if either is in its warning window.
     warnAfter := Min(SilenceWarnAfterMs, silenceMs // 2)
     kind := "", left := 0, span := 1
-    if SilenceSeconds > 0 && now - Watch.changedAt >= warnAfter
+    if silenceOn && now - Watch.changedAt >= warnAfter
         kind := "silence", left := silenceLeft, span := silenceMs - warnAfter
     if Watch.maxEndsAt {
         maxLeft := Watch.maxEndsAt - now
@@ -335,11 +403,17 @@ MonitorTick() {
     UpdateOverlay(kind, Max(left, 0), span)
 }
 
-; Screen x for the countdown text: just right of the button row's mode button ("Auto"),
-; found once per recording. Falls back to a fixed offset from the Dictate button.
-FindCountdownTextX(hwnd, dictate) {
+; Countdown text anchor {x, y = vertical centre}, found once per recording: just right of the
+; mode button ("Auto"), which is the leftmost button in the row under the message box.
+; Falls back to under the box's left edge.
+FindCountdownTextPos(hwnd, dictate) {
     static isButton := CreateIntCondition(UIA_ControlTypePropertyId, UIA_ButtonControlTypeId)
-    fallback := dictate.right + 120
+    box := ""
+    if Watch.box
+        try box := GetRect(Watch.box)
+    if !box
+        box := {left: dictate.right - 600, right: dictate.right + 20, bottom: dictate.bottom}
+    fallback := {x: box.left + 12, y: box.bottom + 18}
     try {
         root := 0, found := 0, count := 0, best := 0
         ComCall(6, UIA, "ptr", hwnd, "ptr*", &root)
@@ -351,14 +425,14 @@ FindCountdownTextX(hwnd, dictate) {
             ComCall(4, found, "int", A_Index - 1, "ptr*", &el)
             try {
                 r := GetRect(el)
-                ; Same row, right of the mic and its settings chevron; nearest one wins.
-                if Abs(r.top - dictate.top) < 10 && r.left > dictate.right + 10 && (!best || r.left < best.left)
+                if r.top >= box.bottom - 2 && r.top < box.bottom + 60 && r.left >= box.left - 20
+                    && r.right <= box.right + 20 && (!best || r.left < best.left)
                     best := r
             }
             ObjRelease(el)
         }
         ObjRelease(found)
-        return best ? best.right + 12 : fallback
+        return best ? {x: best.right + 12, y: (best.top + best.bottom) // 2} : fallback
     } catch {
         return fallback
     }
@@ -446,27 +520,32 @@ UpdateOverlay(kind, left, span) {
         HideOverlay()   ; speech stopped again mid-fade: restore full opacity
     color := kind = "silence" ? "EF9F27" : "E24B4A"
     b := Watch.button
-    if ShowCountdownBar && Watch.composer {
+    if ShowCountdownBar && (Watch.box || Watch.composer) {
         try {
-            c := GetRect(Watch.composer)
             thickness := Max(2, Round(3 * DllCall("GetDpiForWindow", "ptr", Watch.hwnd, "uint") / 96))
-            ; The box's padding below the text line equals half the gap to the button row;
-            ; mirror it above the text line to reach the box's top edge.
-            padding := (b.top - c.bottom) // 2
-            y := c.top - padding - thickness // 2
-            width := Max(thickness, Round((c.right - c.left) * Min(left / span, 1)))
+            if Watch.box {
+                ; Along the message box's top edge, inset past its rounded corners.
+                r := GetRect(Watch.box)
+                x := r.left + 12, full := r.right - r.left - 24, y := r.top - thickness // 2
+            } else {
+                ; No box element: estimate the top edge from the text line (older layout).
+                c := GetRect(Watch.composer)
+                x := c.left, full := c.right - c.left
+                y := c.top - Max(0, (b.top - c.bottom) // 2) - thickness // 2
+            }
+            width := Max(thickness, Round(full * Min(left / span, 1)))
             Overlay.bar.BackColor := color
             ; Round the ends to match Claude's rounded UI: a region clipped to a pill shape.
             DetectHiddenWindows(true)
             WinSetRegion(Format("0-0 w{} h{} r{}-{}", width, thickness, thickness, thickness), Overlay.bar)
-            Overlay.bar.Show(Format("NA x{} y{} w{} h{}", c.left, y, width, thickness))
+            Overlay.bar.Show(Format("NA x{} y{} w{} h{}", x, y, width, thickness))
         }
     }
-    if ShowCountdownText {
+    if ShowCountdownText && Watch.textPos {
         if Watch.textBg = "" {
             ; Sample the empty spot the label will cover, once per recording, while it's hidden.
             CoordMode("Pixel", "Screen")
-            try Watch.textBg := SubStr(PixelGetColor(Watch.textX + 4, (b.top + b.bottom) // 2), 3)
+            try Watch.textBg := SubStr(PixelGetColor(Watch.textPos.x + 4, Watch.textPos.y), 3)
             catch
                 Watch.textBg := "262624"
             Overlay.text.BackColor := Watch.textBg
@@ -479,8 +558,8 @@ UpdateOverlay(kind, left, span) {
         Overlay.label.SetFont("c" color)
         width := MeasureText(Overlay.label, label) + 4
         Overlay.label.Move(, , width)
-        y := (b.top + b.bottom) // 2 - Overlay.labelH // 2
-        Overlay.text.Show(Format("NA x{} y{} w{} h{}", Watch.textX, y, width, Overlay.labelH))
+        y := Watch.textPos.y - Overlay.labelH // 2
+        Overlay.text.Show(Format("NA x{} y{} w{} h{}", Watch.textPos.x, y, width, Overlay.labelH))
     }
 }
 
@@ -496,18 +575,19 @@ MeasureText(ctrl, str) {
     return NumGet(size, 0, "int")
 }
 
-; Returns the composer text, finding the composer on first use. On failure returns the last
-; known text, so a lookup error never counts as new speech.
+; Returns the composer text, finding the composer (and its box) next to the monitored button,
+; at most once a second since a search costs ~400 ms. On failure returns the last known text,
+; so a lookup error never counts as new speech.
 ReadWatchComposer() {
     try {
         if !Watch.composer {
-            button := FindDictateButton(Watch.hwnd)
-            if !button
+            if !Watch.el || A_TickCount - Watch.composerTriedAt < 1000
                 return Watch.text
-            try Watch.composer := FindComposer(Watch.hwnd, button)
-            finally ObjRelease(button)
+            Watch.composerTriedAt := A_TickCount
+            Watch.composer := FindComposer(Watch.hwnd, Watch.el)
             if !Watch.composer
                 return Watch.text
+            Watch.box := FindComposerBox(Watch.composer, Watch.el)
         }
         return GetValue(Watch.composer)
     } catch {
@@ -520,6 +600,10 @@ ReleaseWatchComposer() {
     if Watch.HasOwnProp("composer") && Watch.composer {
         ObjRelease(Watch.composer)
         Watch.composer := 0
+    }
+    if Watch.HasOwnProp("box") && Watch.box {
+        ObjRelease(Watch.box)
+        Watch.box := 0
     }
 }
 
