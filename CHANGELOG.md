@@ -22,6 +22,9 @@ illustrative mockups and charts of measured data, not screenshots.
   active Claude window: started with Claude's own shortcut, the mouse, or this tool's hotkey.
   Recordings are detected within 0.5 s (up to 20 s in a newly opened pane).
 - Maximum length counts from when recording actually began.
+- The tool's own hotkey is optional: Settings → "Use own hotkey (tap to toggle, hold to talk)".
+  Without it, Claude's dictation shortcut starts recording and this tool only adds the silence
+  stop, maximum length and countdown. New installs start without a hotkey; a saved hotkey is kept.
 
 ### Fixed
 
@@ -40,8 +43,7 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ### Planned
 
-- Our hotkey becomes optional (none by default for new installs); README repositioned as a
-  companion to Claude's shortcut.
+- README repositioned as a companion to Claude's shortcut; version 0.4.0.
 
 ## 0.3.0 (2026-09-29)
 

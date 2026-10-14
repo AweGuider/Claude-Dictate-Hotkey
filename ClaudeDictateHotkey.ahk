@@ -110,28 +110,31 @@ LoadSettings() {
     ShowCountdownBar := IniRead(IniPath, "Settings", "ShowCountdownBar", 1) = 1
     ShowCountdownText := IniRead(IniPath, "Settings", "ShowCountdownText", 1) = 1
     PlayWarningSound := IniRead(IniPath, "Settings", "PlayWarningSound", 1) = 1
-    key := IniRead(IniPath, "Settings", "Hotkey", "^Space")
+    ; Empty = no own hotkey: Claude's dictation shortcut starts recording, this tool only watches.
+    key := IniRead(IniPath, "Settings", "Hotkey", "")
     try {
         RegisterHotkey(key)
     } catch {
-        MsgBox("Invalid hotkey in settings.ini: " key "`nFalling back to Ctrl+Space.", "Claude Dictate Hotkey", "Icon!")
-        RegisterHotkey("^Space")
+        MsgBox("Invalid hotkey in settings.ini: " key "`nRunning without a hotkey.", "Claude Dictate Hotkey", "Icon!")
+        RegisterHotkey("")
     }
 }
 
-; Throws if the key is not a valid AutoHotkey hotkey; the previous hotkey stays active then.
+; key "" turns the hotkey off. Throws if the key is not a valid AutoHotkey hotkey; the
+; previous hotkey stays active then.
 RegisterHotkey(key) {
     global CurrentHotkey
     HotIfWinActive(ClaudeWindow)
     try {
-        Hotkey(key, OnDictateHotkey, "On")
+        if key != ""
+            Hotkey(key, OnDictateHotkey, "On")
         if CurrentHotkey != "" && CurrentHotkey != key
             Hotkey(CurrentHotkey, "Off")
     } finally {
         HotIfWinActive()
     }
     CurrentHotkey := key
-    A_IconTip := "Claude Dictate Hotkey: " HotkeyText(key)
+    A_IconTip := "Claude Dictate Hotkey: " (key = "" ? "no hotkey, watching dictation" : HotkeyText(key))
 }
 
 ; Starts on press. A quick tap keeps recording until the next press (toggle); holding
@@ -669,12 +672,18 @@ MainKey(hotkeyName) => RegExReplace(hotkeyName, "^[#!^+<>*~$]+")
 ShowSettings(*) {
     g := Gui("+AlwaysOnTop", "Claude Dictate Hotkey")
     g.SetFont("s10")
-    g.AddText(, "Hotkey (active only while Claude is the focused window):")
-    keyEdit := g.AddEdit("w200", CurrentHotkey)
+    ownKeyCheck := g.AddCheckbox(, "Use own hotkey (tap to toggle, hold to talk)")
+    ownKeyCheck.Value := CurrentHotkey != ""
+    g.AddText("xm y+4 w440 cGray", "Without it, use Claude's own dictation shortcut; silence stop and the "
+        . "countdown still apply. If both use the same key, this one takes over inside Claude.")
+    keyEdit := g.AddEdit("xm y+8 w200", CurrentHotkey)
     readable := g.AddText("x+10 yp+3 w220", HotkeyText(CurrentHotkey))
     keyEdit.OnEvent("Change", (*) => readable.Value := HotkeyText(keyEdit.Value))
-    g.AddButton("xm w200", "Record new hotkey...").OnEvent("Click", (*) => RecordHotkey(keyEdit, readable))
-    g.AddText("xm y+6 cGray", "Tap to start/stop, or hold to record and release to stop.")
+    recordButton := g.AddButton("xm w200", "Record new hotkey...")
+    recordButton.OnEvent("Click", (*) => RecordHotkey(keyEdit, readable))
+    syncOwnKey := (*) => (keyEdit.Enabled := recordButton.Enabled := ownKeyCheck.Value)
+    ownKeyCheck.OnEvent("Click", syncOwnKey)
+    syncOwnKey()
     g.AddText("xm y+14", "Stop after this many seconds of silence (0 = never):")
     silenceEdit := g.AddEdit("w80 Number", SilenceSeconds)
     g.AddText("xm y+14", "Maximum dictation length in seconds (0 = unlimited):")
@@ -696,7 +705,11 @@ ShowSettings(*) {
 
     Save(*) {
         global TimeoutSeconds, SilenceSeconds, ShowCountdownBar, ShowCountdownText, PlayWarningSound
-        key := Trim(keyEdit.Value)
+        key := ownKeyCheck.Value ? Trim(keyEdit.Value) : ""
+        if ownKeyCheck.Value && key = "" {
+            MsgBox("Enter or record a hotkey, or untick 'Use own hotkey'.", "Claude Dictate Hotkey", "Icon! Owner" g.Hwnd)
+            return
+        }
         try {
             RegisterHotkey(key)
         } catch {
@@ -722,7 +735,7 @@ ShowSettings(*) {
             Overlay.text.Hide()
         SetStartupEnabled(startupCheck.Value)
         g.Destroy()
-        ShowTip("Saved: " HotkeyText(key) ", silence stop " (SilenceSeconds ? SilenceSeconds "s" : "off")
+        ShowTip("Saved: " (key = "" ? "no hotkey" : HotkeyText(key)) ", silence stop " (SilenceSeconds ? SilenceSeconds "s" : "off")
             ", max " (TimeoutSeconds ? TimeoutSeconds "s" : "unlimited"))
     }
 }
