@@ -1,8 +1,9 @@
 # Claude Dictate Hotkey
 
-AutoHotkey v2 (64-bit) tool that gives the Claude desktop app (Windows) a dictation hotkey by
-pressing the composer's Dictate button through Windows UI Automation. Unofficial; not affiliated
-with Anthropic.
+AutoHotkey v2 (64-bit) companion for dictation in the Claude desktop app (Windows), working through
+Windows UI Automation: silence stop, maximum length and a countdown overlay for any recording,
+plus an optional tap-or-hold hotkey. Claude has its own dictation shortcut since 2026-10; this
+tool adds what it lacks. Unofficial; not affiliated with Anthropic.
 
 ## Files
 

@@ -4,7 +4,7 @@ Persistent
 
 ;@Ahk2Exe-SetName Claude Dictate Hotkey
 ;@Ahk2Exe-SetDescription Claude Dictate Hotkey
-;@Ahk2Exe-SetVersion 0.3.0
+;@Ahk2Exe-SetVersion 0.4.0
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 AweDev. MIT License.
 ;@Ahk2Exe-SetMainIcon assets\icon.ico
 

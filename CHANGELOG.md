@@ -7,6 +7,8 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ## Unreleased
 
+## 0.4.0 (2026-10-14): companion to Claude's dictation shortcut
+
 ### Context
 
 - **2026-10-14:** the Claude desktop app (version 2.37337) added its own dictation shortcut on
@@ -41,9 +43,9 @@ illustrative mockups and charts of measured data, not screenshots.
 - The countdown fades in and out (~0.3 s) instead of popping, including when another window
   covers and uncovers it.
 
-### Planned
+### Docs
 
-- README repositioned as a companion to Claude's shortcut; version 0.4.0.
+- README repositioned as a companion to Claude's own dictation shortcut.
 
 ## 0.3.0 (2026-09-29)
 
