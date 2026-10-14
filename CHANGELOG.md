@@ -7,6 +7,8 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ## Unreleased
 
+## 0.4.1 (2026-10-14): performance
+
 ### Changed
 
 - Much faster in long conversations, where one full search of Claude's window takes 0.3–0.9 s:
