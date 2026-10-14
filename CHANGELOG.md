@@ -9,6 +9,15 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ## 0.4.1 (2026-10-14): performance
 
+First public release. For what the tool does, see the
+[README](https://github.com/AweGuider/Claude-Dictate-Hotkey#readme); 0.4.0 below covers the switch
+to a companion for Claude's own dictation shortcut.
+
+### Added
+
+- `THIRD-PARTY-NOTICES.md` in the downloads: the exe contains the AutoHotkey interpreter (GPLv2),
+  and the installer is built with Inno Setup.
+
 ### Changed
 
 - Much faster in long conversations, where one full search of Claude's window takes 0.3–0.9 s:

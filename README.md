@@ -1,5 +1,26 @@
 # Claude Dictate Hotkey
 
+<p align="center">
+  <a href="https://github.com/AweGuider/Claude-Dictate-Hotkey/actions/workflows/build.yml"><img src="https://github.com/AweGuider/Claude-Dictate-Hotkey/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/AweGuider/Claude-Dictate-Hotkey/releases"><img src="https://img.shields.io/github/v/release/AweGuider/Claude-Dictate-Hotkey?include_prereleases" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/AweGuider/Claude-Dictate-Hotkey" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?logo=windows&logoColor=white" alt="Platform: Windows 10 | 11">
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#where-it-works">Where it works</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#building">Building</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+<p align="center">
+  <img src="docs/history/overlay-countdown.gif" width="640" alt="Silence countdown on Claude's message box, fading out when you speak again">
+  <br><sub>Illustrative mockup of the silence countdown.</sub>
+</p>
+
 A companion for dictation in the Claude desktop app on Windows. Start dictating however you like
 (Claude's own dictation shortcut, the mic button, or this tool's optional hotkey) and it adds what
 Claude doesn't have:
@@ -19,8 +40,8 @@ All of it can be changed or turned off in [Settings](#usage).
 
 - Windows 10/11 (64-bit)
 - Claude desktop app
-- Claude UI in English (the button is located by its accessible names `Dictate` / `Press and hold to record` /
-  `Stop dictation`)
+- Claude UI in English. The tool finds the mic button by its English accessible names (`Dictate` /
+  `Press and hold to record` / `Stop dictation`), so other display languages aren't supported yet.
 - Claude's dictation shortcut is set in Claude's own Settings (default `Ctrl+D`); it only works while
   Claude is the focused window.
 
@@ -105,10 +126,16 @@ Outputs the exe, portable zip, installer and `SHA256SUMS.txt` to `dist\`. The ve
 `;@Ahk2Exe-SetVersion` line in `ClaudeDictateHotkey.ahk`. Ahk2Exe defaults to
 `C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe` (or `$env:AHK2EXE`); pass `-SkipInstaller` to skip Inno Setup.
 
+GitHub Actions builds the same downloads on every push to `main` and `dev` (the **Build** workflow;
+files under the run's artifacts). Pushing a version tag such as `v0.4.1` builds them and attaches
+them to a pre-release, with notes taken from that version's section in `CHANGELOG.md`. The tag
+must match the `;@Ahk2Exe-SetVersion` line.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history, with illustrations.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The compiled exe contains the AutoHotkey interpreter (GPLv2), and the installer is
+built with Inno Setup; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

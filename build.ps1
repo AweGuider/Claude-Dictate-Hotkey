@@ -42,13 +42,14 @@ if ($proc.ExitCode -ne 0 -or -not (Test-Path $exe)) { throw "Ahk2Exe failed (exi
 
 $staging = Join-Path $dist "portable"
 New-Item -ItemType Directory $staging | Out-Null
-Copy-Item $exe, (Join-Path $root "Settings.bat"), (Join-Path $root "README.md"), (Join-Path $root "LICENSE") $staging
+Copy-Item $exe, (Join-Path $root "Settings.bat"), (Join-Path $root "README.md"), (Join-Path $root "LICENSE"),
+    (Join-Path $root "THIRD-PARTY-NOTICES.md") $staging
 $zip = Join-Path $dist "ClaudeDictateHotkey-$version-portable.zip"
 Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zip
 Remove-Item $staging -Recurse -Force
 
 if (-not $SkipInstaller) {
-    $Iscc = Resolve-Tool $Iscc @("C:\Program Files\Inno Setup 7\ISCC.exe", "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") "Inno Setup (ISCC.exe)"
+    $Iscc = Resolve-Tool $Iscc @($env:ISCC, "C:\Program Files\Inno Setup 7\ISCC.exe", "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") "Inno Setup (ISCC.exe)"
     & $Iscc /Qp "/DAppVersion=$version" (Join-Path $root "installer\ClaudeDictateHotkey.iss")
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed (exit $LASTEXITCODE)" }
 }

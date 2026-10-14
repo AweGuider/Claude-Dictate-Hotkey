@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install AutoHotkey, Ahk2Exe and Inno Setup
+        shell: pwsh
+        run: .github/scripts/install-build-tools.ps1
+
+      - name: Check script syntax
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath $env:AHK -ArgumentList '/ErrorStdOut', '/validate', 'ClaudeDictateHotkey.ahk' -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) { throw "Syntax check failed with exit code $($process.ExitCode)" }
+
+      - name: Build exe, portable zip and installer
+        shell: pwsh
+        run: ./build.ps1 -Ahk2Exe $env:AHK2EXE -AhkBase $env:AHK -Iscc $env:ISCC
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ClaudeDictateHotkey
+          path: dist/

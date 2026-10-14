@@ -14,6 +14,11 @@ tool adds what it lacks. Unofficial; not affiliated with Anthropic.
 - `installer\ClaudeDictateHotkey.iss`: Inno Setup 7 per-user installer; never change `AppId`
 - `assets\`: icon and warning sounds (embedded via `FileInstall` when compiled)
 - `CHANGELOG.md` + `docs\history\`: version history with illustrative mockups and measured charts
+- `.github\workflows\build.yml` (push to main/dev: syntax check + build, artifacts) and
+  `release.yml` (tag `vX.Y.Z` must match `;@Ahk2Exe-SetVersion`; builds and attaches the
+  installer, portable zip and SHA256SUMS to a pre-release, notes from that CHANGELOG section).
+  Tool versions are pinned in `.github\scripts\install-build-tools.ps1`.
+- `THIRD-PARTY-NOTICES.md`: shipped in the zip and installer; update it if bundled software changes
 
 ## Hard-won facts (don't re-learn these)
 
