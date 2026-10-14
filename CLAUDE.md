@@ -12,6 +12,7 @@ with Anthropic.
   `;@Ahk2Exe-SetVersion` in the main script
 - `installer\ClaudeDictateHotkey.iss`: Inno Setup 7 per-user installer; never change `AppId`
 - `assets\`: icon and warning sounds (embedded via `FileInstall` when compiled)
+- `CHANGELOG.md` + `docs\history\`: version history with illustrative mockups and measured charts
 
 ## Hard-won facts (don't re-learn these)
 
@@ -29,6 +30,8 @@ with Anthropic.
 - UIA rects are physical pixels; the script runs per-monitor DPI aware. Keep it that way.
 - Detect Claude by window (`ahk_exe claude.exe ahk_class Chrome_WidgetWin_1`); the Claude Code
   CLI is also `claude.exe`.
+- Since Claude 2.37337 (2026-10) there is a native dictation shortcut (focused-only, toggle or hold).
+  The button's UIA `AcceleratorKey` reports `Shift+F10`, not the configured key; it can't be read.
 
 ## Working rules
 
@@ -52,4 +55,6 @@ Keep these current as part of any change; don't wait to be asked:
   plan changed.
 - `SIGNPATH_PLAN.md`: update when the version, release, CI workflow or signing status changes.
 
-Before handing off, check all three against what just changed and mention any updates made.
+In the repo, add user-visible changes to `CHANGELOG.md` under `Unreleased`.
+
+Before handing off, check all of these against what just changed and mention any updates made.

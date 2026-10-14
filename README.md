@@ -89,6 +89,10 @@ Outputs the exe, portable zip, installer and `SHA256SUMS.txt` to `dist\`. The ve
 `;@Ahk2Exe-SetVersion` line in `ClaudeDictateHotkey.ahk`. Ahk2Exe defaults to
 `C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe` (or `$env:AHK2EXE`); pass `-SkipInstaller` to skip Inno Setup.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history, with illustrations.
+
 ## License
 
 [MIT](LICENSE)
