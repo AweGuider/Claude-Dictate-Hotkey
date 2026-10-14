@@ -35,6 +35,8 @@ illustrative mockups and charts of measured data, not screenshots.
 - The countdown bar and text could reappear after dictation stopped and stay on screen.
 - The countdown stays visible while Claude is visible but not the active window (e.g. you're
   working on another monitor); it hides when Claude is covered or minimized.
+- The countdown fades in and out (~0.3 s) instead of popping, including when another window
+  covers and uncovers it.
 
 ### Planned
 

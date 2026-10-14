@@ -456,43 +456,51 @@ CreateOverlay() {
     text.SetFont("s7 w600 q5", "Segoe UI Variable Text")   ; Windows 11; keeps Segoe UI if missing
     label := text.AddText("x0 y0 w320", "Max length · 0:00 left")
     label.GetPos(, , , &labelH)
-    overlay := {bar: bar, text: text, label: label, labelH: labelH, barAlpha: 235, fading: false, fadeStep: 0}
-    ResetOverlayAlpha(overlay)   ; also makes both windows layered, so click-through applies
+    ; level = current opacity 0..1, animated toward target by AnimateOverlay.
+    overlay := {bar: bar, text: text, label: label, labelH: labelH, barAlpha: 235, level: 0, target: 0}
+    ApplyOverlayLevel(overlay)   ; also makes both windows layered, so click-through applies
     return overlay
 }
 
-ResetOverlayAlpha(overlay) {
+ApplyOverlayLevel(overlay) {
     DetectHiddenWindows(true)
-    WinSetTransparent(overlay.barAlpha, overlay.bar)
-    WinSetTransparent(255, overlay.text)
+    WinSetTransparent(Round(overlay.barAlpha * overlay.level), overlay.bar)
+    WinSetTransparent(Round(255 * overlay.level), overlay.text)
 }
 
-; Immediate hide, or a short fade-out when a countdown is cancelled by speech.
-HideOverlay(fade := false) {
-    if fade && !Overlay.fading && (DllCall("IsWindowVisible", "ptr", Overlay.bar.Hwnd)
-        || DllCall("IsWindowVisible", "ptr", Overlay.text.Hwnd)) {
-        Overlay.fading := true, Overlay.fadeStep := 0
-        SetTimer(FadeOverlayStep, 40)
+; Fades the overlay in (target 1) or out (target 0) over ~0.3 s, continuing from the current
+; opacity if a fade in the other direction is still running.
+FadeOverlayTo(target) {
+    if Overlay.target = target && (Overlay.level = target || target = 0 && !OverlayShown())
         return
+    Overlay.target := target
+    SetTimer(AnimateOverlay, 40)
+}
+
+AnimateOverlay() {
+    step := 1 / 8
+    Overlay.level := Overlay.target > Overlay.level
+        ? Min(Overlay.level + step, 1) : Max(Overlay.level - step, 0)
+    ApplyOverlayLevel(Overlay)
+    if Overlay.level = Overlay.target {
+        SetTimer(AnimateOverlay, 0)
+        if Overlay.level = 0 {
+            Overlay.bar.Hide()
+            Overlay.text.Hide()
+        }
     }
-    if fade && Overlay.fading
-        return
-    SetTimer(FadeOverlayStep, 0)
-    Overlay.fading := false
+}
+
+OverlayShown() => DllCall("IsWindowVisible", "ptr", Overlay.bar.Hwnd)
+    || DllCall("IsWindowVisible", "ptr", Overlay.text.Hwnd)
+
+; Immediate hide, for stops and when the monitor ends.
+HideOverlay() {
+    SetTimer(AnimateOverlay, 0)
     Overlay.bar.Hide()
     Overlay.text.Hide()
-    ResetOverlayAlpha(Overlay)
-}
-
-FadeOverlayStep() {
-    Overlay.fadeStep += 1
-    remaining := 1 - Overlay.fadeStep / 8   ; ~0.3 s at 40 ms per step
-    if remaining <= 0 {
-        HideOverlay()
-        return
-    }
-    WinSetTransparent(Round(Overlay.barAlpha * remaining), Overlay.bar)
-    WinSetTransparent(Round(255 * remaining), Overlay.text)
+    Overlay.level := 0, Overlay.target := 0
+    ApplyOverlayLevel(Overlay)
 }
 
 PlayOverlaySound(file) {
@@ -509,8 +517,7 @@ UpdateOverlay(kind, left, span) {
         return
     }
     if kind = "" {
-        if Watch.warning != ""
-            HideOverlay(true)
+        FadeOverlayTo(0)
         Watch.warning := ""
         return
     }
@@ -524,11 +531,10 @@ UpdateOverlay(kind, left, span) {
         PlayOverlaySound(FinalWarningSound)
     }
     if !OverlayVisibleOnClaude() {
-        HideOverlay()
+        FadeOverlayTo(0)   ; covered by another window: fade out, and back in when uncovered
         return
     }
-    if Overlay.fading
-        HideOverlay()   ; speech stopped again mid-fade: restore full opacity
+    FadeOverlayTo(1)
     color := kind = "silence" ? "EF9F27" : "E24B4A"
     b := Watch.button
     if ShowCountdownBar && (Watch.box || Watch.composer) {
