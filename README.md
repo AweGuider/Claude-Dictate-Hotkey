@@ -1,3 +1,7 @@
+<h1 align="center">Claude Dictate Hotkey</h1>
+
+<p align="center"><b>Tap-or-hold voice dictation hotkey for the Claude desktop app on Windows, with silence auto-stop.</b></p>
+
 <p align="center">
   <img src="docs/images/social-preview.png" width="100%" alt="Claude Dictate Hotkey: tap or hold Ctrl+Space to dictate in the Claude desktop app, with silence auto-stop, a maximum length cap and a countdown before either stop">
 </p>
@@ -14,6 +18,7 @@
   <a href="#usage">Usage</a> ·
   <a href="#where-it-works">Where it works</a> ·
   <a href="#how-it-works">How it works</a> ·
+  <a href="#faq">FAQ</a> ·
   <a href="#building">Building</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
@@ -36,6 +41,17 @@ its own. This tool adds, for any dictation in Claude, however you started it:
 
 The hotkey, both limits and the countdown can be changed or turned off in [Settings](#usage).
 If you'd rather use Claude's own shortcut, untick **Use own hotkey** and keep the rest.
+
+## Compared with Claude's own shortcut
+
+| | Claude's dictation shortcut (default `Ctrl+D`) | This tool (default `Ctrl+Space`) |
+| :- | :- | :- |
+| Tap to start and stop | Yes, if **Hold to record** is off | Yes |
+| Hold to talk (push-to-talk) | Yes, if **Hold to record** is on | Yes, same key as tap |
+| Stops after silence | No | Yes, after 30 s (adjustable or off) |
+| Maximum length | No | Yes, 10 min (adjustable or off) |
+| Warning before a stop | No | Countdown bar, text and sounds |
+| Transcription | Claude's | Claude's (same Dictate button) |
 
 > Unofficial community tool. Not affiliated with or endorsed by Anthropic.
 
@@ -116,6 +132,36 @@ If an app update renames the button, the hotkey beeps and shows "Dictate button 
 update `DICTATE_IDLE_NAME` / `DICTATE_HOLD_IDLE_NAME` / `DICTATE_ACTIVE_NAME` in `ClaudeUia.ahk`.
 If an update moves the button or message box, the silence stop turns itself off rather than
 stopping you mid-sentence.
+
+## FAQ
+
+**How do I start Claude dictation with a keyboard shortcut on Windows?**
+Install this tool and press `Ctrl+Space` in the Claude desktop app. Claude also has its own
+shortcut (default `Ctrl+D`, set in Claude's Settings); this tool adds tap-or-hold and auto-stop.
+
+**Can I hold a key to talk (push-to-talk) in Claude?**
+Yes. Hold `Ctrl+Space` to record and release to stop; a quick tap toggles instead. It works
+whether Claude's **Hold to record** setting is on or off.
+
+**How do I make Claude stop dictating when I stop talking?**
+The tool stops dictation after 30 seconds with no new words (adjustable, `0` turns it off) and
+shows a countdown first. It works for any dictation in Claude, including ones started with
+Claude's own shortcut.
+
+**Does it record or send my audio anywhere?**
+No. Claude does the transcription as usual. The tool only presses Claude's Dictate button and
+reads the message box through Windows UI Automation, and makes no network connections.
+
+**Does it work in Claude Code?**
+In the desktop app's Code tab, yes. In the Claude Code CLI and VS Code extension, use the
+built-in `/voice` command instead; see [Where it works](#where-it-works).
+
+**Why does my antivirus or SmartScreen warn about it?**
+Compiled AutoHotkey programs are common false positives and the releases aren't code-signed yet.
+See [Antivirus / SmartScreen warnings](#antivirus--smartscreen-warnings) or run the `.ahk` from source.
+
+**Is this made by Anthropic?**
+No. It's an unofficial community tool, not affiliated with or endorsed by Anthropic.
 
 ## Building
 
