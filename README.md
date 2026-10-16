@@ -23,11 +23,6 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-<p align="center">
-  <img src="docs/history/overlay-countdown.gif" width="640" alt="Silence countdown on Claude's message box, fading out when you speak again">
-  <br><sub>Illustrative mockup of the silence countdown.</sub>
-</p>
-
 A dictation hotkey for the Claude desktop app on Windows. Press **Ctrl+Space** in Claude: **tap**
 to start and tap again to stop, or **hold** to record and release to stop.
 
@@ -41,6 +36,11 @@ its own. This tool adds, for any dictation in Claude, however you started it:
 
 The hotkey, both limits and the countdown can be changed or turned off in [Settings](#usage).
 If you'd rather use Claude's own shortcut, untick **Use own hotkey** and keep the rest.
+
+<p align="center">
+  <img src="docs/history/overlay-countdown.gif" width="640" alt="Silence countdown on Claude's message box, fading out when you speak again">
+  <br><sub>Illustrative mockup of the silence countdown.</sub>
+</p>
 
 ## Compared with Claude's own shortcut
 
