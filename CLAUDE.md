@@ -9,6 +9,7 @@ tool adds what it lacks. Unofficial; not affiliated with Anthropic.
 
 - `ClaudeDictateHotkey.ahk`: hotkey, stop logic, silence monitor, countdown overlay, settings GUI
 - `ClaudeUia.ahk`: raw-COM UI Automation helpers (find button/composer, read state, click)
+- `ClaudeAudio.ahk`: raw-COM Core Audio helpers (meter of Claude's own capture session)
 - `build.ps1`: builds `dist\` (exe, portable zip, installer, SHA256SUMS); version comes from
   `;@Ahk2Exe-SetVersion` in the main script
 - `installer\ClaudeDictateHotkey.iss`: Inno Setup 7 per-user installer; never change `AppId`
@@ -31,8 +32,15 @@ tool adds what it lacks. Unofficial; not affiliated with Anthropic.
   Always go through `WithDictateButton` (fresh lookup + retry).
 - Claude timing: ~2.1 s restart cooldown after a stop (clicks are queued); stops within ~0.7 s of a
   recording starting are dropped or delayed. All stops go through `StopReliably`.
-- Silence = no change in the composer text (Claude streams the transcript live). Mic meters were
-  rejected (device unknown).
+- Silence = Claude's capture-session peak below `VoiceThreshold` and no composer text change.
+  Since 2026-10 some accounts get no live transcript ("Listening…" only, not exposed to UIA;
+  text inserted at stop), so text alone can't tell speech from silence. Claude records through
+  its own claude.exe capture session (state 1 only while recording); its meter reads 0.05–0.31
+  speaking, ≤0.005 in pauses (MV7+). Endpoint meters were rejected earlier (device unknown).
+  Peaks alone let claps/snaps count as voice (they hit 0.99 for ~100–220 ms), so `VoiceTick`
+  (50 ms) needs 6 of the last 10 checks loud; speech bursts last 450 ms and more. One meter
+  read costs ~0.18 ms (cross-process), ~0.4% of a core at 50 ms; don't poll faster.
+  Without a meter, silence stop needs at least one composer change since the start.
 - Layout changes break geometry silently. Since Claude 2.37337 the mic sits at the right end of the
   text row and "Auto" is in a row below the box; before, the mic was in a row below the text.
   `FindComposer` (Edit spanning the mic, vertically closest), `FindComposerBox` (raw-view ancestor

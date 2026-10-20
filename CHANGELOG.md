@@ -7,6 +7,18 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ## Unreleased
 
+### Fixed
+
+- Silence stop no longer cuts dictation off for accounts where Claude shows only "Listening…"
+  and inserts the text after the stop (a Claude change from 2026-10). Silence is now judged by
+  the level meter of Claude's own recording, plus new text in the message box. Only sound that
+  lasts (above the level for 300 of the last 500 ms) counts, so claps and snaps don't.
+
+### Added
+
+- Setting **Mic level that counts as speech** (default 2 %). `0` judges by the message box text
+  only, as before, but never stops a recording whose text hasn't changed since it started.
+
 ## 0.4.2 (2026-10-14)
 
 ### Changed

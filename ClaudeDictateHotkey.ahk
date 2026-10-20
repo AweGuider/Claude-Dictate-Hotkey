@@ -9,6 +9,7 @@ Persistent
 ;@Ahk2Exe-SetMainIcon assets\icon.ico
 
 #Include ClaudeUia.ahk
+#Include ClaudeAudio.ahk
 
 ; UIA reports physical pixels; make window positions physical too, so the overlay lines up
 ; on scaled and mixed-DPI monitors.
@@ -22,6 +23,13 @@ global ClaudeWindow := "ahk_exe claude.exe ahk_class Chrome_WidgetWin_1"
 global CurrentHotkey := ""
 global TimeoutSeconds := 600
 global SilenceSeconds := 30
+; Claude's mic peak (percent of full scale) that counts as speech; 0 = judge by the text only.
+global VoiceThreshold := 2
+; Voice needs the level above the threshold in VoiceMinChecks of the last VoiceWindowChecks
+; checks (300 of the last 500 ms), so claps and snaps don't count.
+global VoicePollMs := 50
+global VoiceWindowChecks := 10
+global VoiceMinChecks := 6
 global ShowCountdownBar := true
 global ShowCountdownText := true
 global PlayWarningSound := true
@@ -107,9 +115,10 @@ SetStartupEnabled(enabled) {
 }
 
 LoadSettings() {
-    global TimeoutSeconds, SilenceSeconds, ShowCountdownBar, ShowCountdownText, PlayWarningSound
+    global TimeoutSeconds, SilenceSeconds, VoiceThreshold, ShowCountdownBar, ShowCountdownText, PlayWarningSound
     TimeoutSeconds := Integer(IniRead(IniPath, "Settings", "TimeoutSeconds", 600))
     SilenceSeconds := Integer(IniRead(IniPath, "Settings", "SilenceSeconds", 30))
+    VoiceThreshold := Integer(IniRead(IniPath, "Settings", "VoiceThresholdPercent", 2))
     ShowCountdownBar := IniRead(IniPath, "Settings", "ShowCountdownBar", 1) = 1
     ShowCountdownText := IniRead(IniPath, "Settings", "ShowCountdownText", 1) = 1
     PlayWarningSound := IniRead(IniPath, "Settings", "PlayWarningSound", 1) = 1
@@ -369,26 +378,55 @@ RefreshScanButtons(hwnd) {
 }
 
 ; Monitors a recording: silence auto-stop, maximum length, and the countdown overlay.
-; Silence = no change to the composer text, since Claude writes the transcript there live.
-; The button check runs once a second; text reads (<1 ms) run every tick.
+; Silence = no voice (VoiceTick) and no change to the composer text.
+; Without Claude's mic meter, the composer text alone decides, and only once it has changed:
+; since 2026-10 some accounts get no live transcript, only the full text after the stop.
+; The button and meter checks run once a second; text reads (<1 ms) every tick.
 StartMonitor(hwnd) {
     global Watch, MonitorActive
     StopMonitor()
     Watch := {hwnd: hwnd, composer: 0, text: "", changedAt: A_TickCount, startedAt: A_TickCount
         , seen: false, lastCheck: 0, el: 0, button: 0, box: 0, composerTriedAt: 0, textPos: ""
-        , warning: "", finalWarned: false, textBg: "", maxEndsAt: 0}
+        , warning: "", finalWarned: false, textBg: "", maxEndsAt: 0, textChanged: false, meter: 0
+        , loud: [], voiceAt: 0}
     MonitorActive := true
     SetTimer(MonitorTick, 250)
+    SetTimer(VoiceTick, VoicePollMs)
+}
+
+; Voice = Claude's mic level at or above VoiceThreshold for most of the last half second.
+; Measured on a Shure MV7+: claps stay loud for ~200 ms (4 of 10 checks at most), snaps ~100 ms,
+; speech bursts 450 ms and longer (8–10 of 10). A level read costs ~0.2 ms.
+VoiceTick() {
+    if !Watch.meter
+        return
+    try {
+        loud := MeterPeak(Watch.meter) * 100 >= VoiceThreshold
+    } catch {
+        Watch.meter := 0   ; MonitorTick searches again
+        return
+    }
+    Watch.loud.Push(loud)
+    if Watch.loud.Length > VoiceWindowChecks
+        Watch.loud.RemoveAt(1)
+    count := 0
+    for isLoud in Watch.loud
+        count += isLoud
+    if count >= VoiceMinChecks
+        Watch.voiceAt := A_TickCount
 }
 
 StopMonitor() {
     global MonitorActive
     SetTimer(MonitorTick, 0)
+    SetTimer(VoiceTick, 0)
     MonitorActive := false
     Scan.searchedAt := 0   ; Claude rebuilt the buttons; refresh the scan's references
     HideOverlay()
     ReleaseWatchComposer()
     ReleaseMonitorButton()
+    if Watch.HasOwnProp("meter")
+        Watch.meter := 0
     if Watch.HasOwnProp("warning")
         Watch.warning := ""
 }
@@ -440,15 +478,23 @@ MonitorTick() {
             Watch.changedAt := now
             Watch.maxEndsAt := TimeoutSeconds > 0 ? now + TimeoutSeconds * 1000 : 0
         }
+        if !Watch.meter && VoiceThreshold > 0 {
+            try Watch.meter := FindClaudeCaptureMeter()
+            if Watch.meter
+                Watch.changedAt := now   ; count silence from when there is a level to judge by
+        }
     }
     if !Watch.seen
         return
     text := ReadWatchComposer()
     if text != Watch.text
-        Watch.text := text, Watch.changedAt := now
+        Watch.text := text, Watch.changedAt := now, Watch.textChanged := true
+    if Watch.voiceAt > Watch.changedAt
+        Watch.changedAt := Watch.voiceAt
 
-    ; Without the composer there's no transcript to watch: never treat that as silence.
-    silenceOn := SilenceSeconds > 0 && Watch.composer
+    ; Never treat missing evidence as silence: no meter and no composer, or a composer that
+    ; hasn't changed yet (possibly no live transcript).
+    silenceOn := SilenceSeconds > 0 && (Watch.meter || Watch.composer && Watch.textChanged)
     silenceMs := SilenceSeconds * 1000
     silenceLeft := silenceMs - (now - Watch.changedAt)
     if silenceOn && silenceLeft <= 0 {
@@ -798,6 +844,10 @@ ShowSettings(*) {
     syncOwnKey()
     g.AddText("xm y+14", "Stop after this many seconds of silence (0 = never):")
     silenceEdit := g.AddEdit("w80 Number", SilenceSeconds)
+    g.AddText("xm y+14", "Mic level that counts as speech, in % (0 = judge by the text only):")
+    voiceEdit := g.AddEdit("w80 Number", VoiceThreshold)
+    g.AddText("xm y+4 w440 cGray", "Read from Claude's own recording. Raise it if background noise keeps "
+        . "dictation running; lower it if quiet speech gets stopped.")
     g.AddText("xm y+14", "Maximum dictation length in seconds (0 = unlimited):")
     timeoutEdit := g.AddEdit("w80 Number", TimeoutSeconds)
     g.AddText("xm y+14", "Before an automatic stop:")
@@ -816,7 +866,7 @@ ShowSettings(*) {
     g.Show()
 
     Save(*) {
-        global TimeoutSeconds, SilenceSeconds, ShowCountdownBar, ShowCountdownText, PlayWarningSound
+        global TimeoutSeconds, SilenceSeconds, VoiceThreshold, ShowCountdownBar, ShowCountdownText, PlayWarningSound
         key := ownKeyCheck.Value ? Trim(keyEdit.Value) : ""
         if ownKeyCheck.Value && key = "" {
             MsgBox("Enter or record a hotkey, or untick 'Use own hotkey'.", "Claude Dictate Hotkey", "Icon! Owner" g.Hwnd)
@@ -830,6 +880,7 @@ ShowSettings(*) {
         }
         TimeoutSeconds := Integer(timeoutEdit.Value || 0)
         SilenceSeconds := Integer(silenceEdit.Value || 0)
+        VoiceThreshold := Min(Integer(voiceEdit.Value || 0), 100)
         ShowCountdownBar := barCheck.Value = 1
         ShowCountdownText := textCheck.Value = 1
         PlayWarningSound := soundCheck.Value = 1
@@ -837,6 +888,7 @@ ShowSettings(*) {
         DirCreate(iniDir)
         IniWrite(key, IniPath, "Settings", "Hotkey")
         IniWrite(SilenceSeconds, IniPath, "Settings", "SilenceSeconds")
+        IniWrite(VoiceThreshold, IniPath, "Settings", "VoiceThresholdPercent")
         IniWrite(TimeoutSeconds, IniPath, "Settings", "TimeoutSeconds")
         IniWrite(ShowCountdownBar ? 1 : 0, IniPath, "Settings", "ShowCountdownBar")
         IniWrite(ShowCountdownText ? 1 : 0, IniPath, "Settings", "ShowCountdownText")

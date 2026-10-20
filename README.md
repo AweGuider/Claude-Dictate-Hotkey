@@ -29,7 +29,7 @@ to start and tap again to stop, or **hold** to record and release to stop.
 Claude has its own dictation shortcut too, but it does tap *or* hold, not both, and never stops on
 its own. This tool adds, for any dictation in Claude, however you started it:
 
-- **Silence stop:** dictation stops by itself after 30 seconds without new words.
+- **Silence stop:** dictation stops by itself after 30 seconds without speech.
 - **Maximum length:** dictation stops after 10 minutes at most.
 - **Countdown before either stop:** a shrinking bar on the message box, a short text next to it,
   and soft warning sounds, so a stop never catches you off guard.
@@ -91,9 +91,14 @@ this repository if you prefer to run the `.ahk` directly. False positives can be
     hotkey...** and press the combo. It only fires while Claude is focused. Pick a key different
     from Claude's dictation shortcut: if they match, this one takes over inside Claude. If you use
     an input method that switches on Ctrl+Space (e.g. Chinese or Japanese), avoid that combo.
-  - **Silence stop**: seconds without new dictated text before dictation stops; `0` disables it.
-    Silence is detected from the transcript Claude writes into the message box, so background
-    noise doesn't keep it running. Applies to any dictation, however it was started.
+  - **Silence stop**: seconds without speech before dictation stops; `0` disables it. Applies to
+    any dictation, however it was started.
+  - **Mic level that counts as speech** (default `2` %): silence means Claude's own recording
+    stays below this level and no new text appears in the message box. A sound has to stay above
+    it for most of half a second to count, so claps, snaps and clicks don't keep dictation
+    running; steady noise (music, a fan, other voices) does. Raise it if background noise keeps
+    dictation running. `0` judges by the message box text only, which needs Claude
+    to show the transcript live while you speak (not every account does since 2026-10).
   - **Maximum dictation length** in seconds; `0` means unlimited.
   - **Before an automatic stop**: a shrinking bar along the top of the message box, countdown text
     next to the mic, a soft tick when the countdown starts and a double click 10 s before the stop.
@@ -124,14 +129,17 @@ terminal doesn't intercept: Windows Terminal, for example, uses `Ctrl+Shift+Spac
 
 `ClaudeUia.ahk` uses Windows UI Automation to read Claude's Dictate button. While Claude is the
 active window, the tool checks every half second whether any composer is recording (split view
-included). When one is, it watches the message box: Claude writes the transcript there as you
-speak, so no new text means silence. The hotkey toggles the button through accessibility actions.
-No clicks at screen coordinates and nothing inside Claude is modified.
+included). When one is, `ClaudeAudio.ahk` reads the level meter Windows keeps for Claude's own
+recording (Core Audio sessions), and the tool watches the message box for new text. Neither
+for the set time means silence. The tool reads the level only; it never opens the microphone or
+receives audio. The hotkey toggles the button through accessibility actions. No clicks at screen
+coordinates and nothing inside Claude is modified.
 
 If an app update renames the button, the hotkey beeps and shows "Dictate button not found";
 update `DICTATE_IDLE_NAME` / `DICTATE_HOLD_IDLE_NAME` / `DICTATE_ACTIVE_NAME` in `ClaudeUia.ahk`.
-If an update moves the button or message box, the silence stop turns itself off rather than
-stopping you mid-sentence.
+If Claude's recording level can't be read and the message box hasn't changed since the recording
+started (or the box can't be found), the silence stop turns itself off rather than stopping you
+mid-sentence.
 
 ## FAQ
 
@@ -144,13 +152,14 @@ Yes. Hold `Ctrl+Space` to record and release to stop; a quick tap toggles instea
 whether Claude's **Hold to record** setting is on or off.
 
 **How do I make Claude stop dictating when I stop talking?**
-The tool stops dictation after 30 seconds with no new words (adjustable, `0` turns it off) and
+The tool stops dictation after 30 seconds without speech (adjustable, `0` turns it off) and
 shows a countdown first. It works for any dictation in Claude, including ones started with
 Claude's own shortcut.
 
 **Does it record or send my audio anywhere?**
-No. Claude does the transcription as usual. The tool only presses Claude's Dictate button and
-reads the message box through Windows UI Automation, and makes no network connections.
+No. Claude does the transcription as usual. The tool presses Claude's Dictate button, reads the
+message box through Windows UI Automation and reads the level meter of Claude's recording. It
+never receives audio and makes no network connections.
 
 **Does it work in Claude Code?**
 In the desktop app's Code tab, yes. In the Claude Code CLI and VS Code extension, use the
