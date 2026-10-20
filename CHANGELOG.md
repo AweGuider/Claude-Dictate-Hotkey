@@ -7,6 +7,8 @@ illustrative mockups and charts of measured data, not screenshots.
 
 ## Unreleased
 
+## 0.5.0 (2026-10-20)
+
 ### Fixed
 
 - Silence stop no longer cuts dictation off for accounts where Claude shows only "Listening…"
